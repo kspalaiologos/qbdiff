@@ -42,7 +42,7 @@ static inline void wi64(int64_t x, uint8_t * buf) {
     buf[7] = x & 0xff;
 }
 
-static inline int64_t ri64(uint8_t * buf) {
+static inline int64_t ri64(const uint8_t * buf) {
     return ((int64_t)buf[0] << 56) | ((int64_t)buf[1] << 48) | ((int64_t)buf[2] << 40) | ((int64_t)buf[3] << 32) |
            ((int64_t)buf[4] << 24) | ((int64_t)buf[5] << 16) | ((int64_t)buf[6] << 8) | (int64_t)buf[7];
 }
@@ -96,6 +96,7 @@ void unmap_file(struct file_mapping mapping) {
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 struct file_mapping map_file(char * path) {
     struct file_mapping mapping = {0};

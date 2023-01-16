@@ -32,14 +32,14 @@
 #define QBDIFF_MAGIC_BIG "QBDB1"
 #define QBDIFF_MAGIC_FULL "QBDF1"
 
-static int64_t matchlen(uint8_t * old, int64_t old_size, uint8_t * new, int64_t new_size) {
+static int64_t matchlen(const uint8_t * old, int64_t old_size, const uint8_t * new, int64_t new_size) {
     int64_t i, end = min(old_size, new_size);
     for (i = 0; i < end; i++)
         if (old[i] != new[i]) break;
     return i;
 }
 
-static void search(int32_t * I, uint8_t * old, int64_t old_size, uint8_t * new, int64_t new_size, int64_t st,
+static void search(const int32_t * I, const uint8_t * old, int64_t old_size, const uint8_t * new, int64_t new_size, int64_t st,
                    int64_t en, int64_t * old_pos, int64_t * max_len) {
     int64_t x, y;
 
@@ -69,7 +69,7 @@ static void search(int32_t * I, uint8_t * old, int64_t old_size, uint8_t * new, 
     x = st + (en - st) / 2;
 
     int64_t length = min(old_size - I[x], new_size);
-    uint8_t * oldoffset = old + I[x];
+    const uint8_t * oldoffset = old + I[x];
 
     /* This match *could* be the longest one, so check for that here */
     int64_t tmp = matchlen(oldoffset, length, new, length);
@@ -222,7 +222,7 @@ int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_size, si
         fwrite(old, 1, old_size, diff_file);
     } else {
         fwrite(QBDIFF_MAGIC_BIG, 1, 5, diff_file);
-        char buf[8];
+        uint8_t buf[8];
         wi64(old_size, buf);
         fwrite(buf, 1, 8, diff_file);
         wi64(new_size, buf);

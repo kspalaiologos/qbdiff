@@ -10,6 +10,8 @@ tags
 *.so
 qbdiff
 qbdiff-*
+qbpatch
+qbpatch-*
 .version
 .version-prev
 
