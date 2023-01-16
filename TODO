@@ -1,0 +1,5 @@
+
+- Provide a possibility for static linking.
+- OpenMP support for libsais.
+- Check in libsais64 to support files larger than 64-bit.
+- Error checking.

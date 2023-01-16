@@ -18,13 +18,8 @@ qbdiff_CFLAGS = $(AM_CFLAGS)
 qbdiff_SOURCES = src/qbdiff.c
 qbpatch_CFLAGS = $(AM_CFLAGS)
 qbpatch_SOURCES = src/qbpatch.c
-if ENABLE_STATIC
-qbdiff_SOURCES += $(libqbdiff_la_SOURCES)
-qbpatch_SOURCES += $(libqbdiff_la_SOURCES)
-else
 qbdiff_LDADD = libqbdiff.la
 qbpatch_LDADD = libqbdiff.la
-endif
 
 dist_man_MANS = man/qbdiff.1 man/qbpatch.1
 
