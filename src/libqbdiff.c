@@ -32,14 +32,14 @@
 #define QBDIFF_MAGIC_BIG "QBDB1"
 #define QBDIFF_MAGIC_FULL "QBDF1"
 
-static int64_t matchlen(const uint8_t * old, int64_t old_size, const uint8_t * new, int64_t new_size) {
+static int64_t matchlen(const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new, int64_t new_size) {
     int64_t i, end = min(old_size, new_size);
     for (i = 0; i < end; i++)
         if (old[i] != new[i]) break;
     return i;
 }
 
-static void search(const int32_t * I, const uint8_t * old, int64_t old_size, const uint8_t * new, int64_t new_size, int64_t st,
+static void search(const int32_t * RESTRICT I, const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new, int64_t new_size, int64_t st,
                    int64_t en, int64_t * old_pos, int64_t * max_len) {
     int64_t x, y;
 
@@ -86,7 +86,7 @@ static void search(const int32_t * I, const uint8_t * old, int64_t old_size, con
     }
 }
 
-int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_size, size_t new_size, FILE * diff_file) {
+int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size, FILE * diff_file) {
     if (old_size == 0) {
         // Handle the case where the old file is empty.
         fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
@@ -94,7 +94,12 @@ int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_size, si
         return 0;
     }
     int32_t * I = malloc((old_size + 1) * sizeof(int32_t));
-    libsais(old, I, old_size, 1, NULL);
+
+    #if defined(_OPENMP)
+        libsais_omp(old, I, old_size, 1, NULL, 0);
+    #else
+        libsais(old, I, old_size, 1, NULL);
+    #endif
 
     uint8_t *cb, *db, *eb;
     int64_t cblen = 0, dblen = 0, eblen = 0;
@@ -244,7 +249,7 @@ int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_size, si
     return 0;
 }
 
-int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len, FILE * new_file) {
+int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len, FILE * new_file) {
     // Check magic
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
