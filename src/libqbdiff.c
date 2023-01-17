@@ -29,9 +29,18 @@
 #include "libqbdiff_private.h"
 #include "libsais.h"
 #include "libsais64.h"
+#include "blake2b.h"
 
 #define QBDIFF_MAGIC_BIG "QBDB1"
 #define QBDIFF_MAGIC_FULL "QBDF1"
+
+static void blake2b_cksum(const uint8_t * data, int64_t size, uint8_t cksum[64]) {
+    blake2b_state state;
+    blake2b_init(&state, 64);
+    blake2b_update(&state, data, size);
+    memset(cksum, 0, 64);
+    blake2b_final(&state, cksum, 64);
+}
 
 static int64_t matchlen(const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new,
                         int64_t new_size) {
@@ -518,9 +527,14 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
 
 int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size,
                    FILE * diff_file) {
+    char cksum[64];
+    blake2b_cksum(new, new_size, cksum);
+
     if (old_size == 0) {
         // Handle the case where the old file is empty.
         if(fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5)
+            return QBERR_IOERR;
+        if(fwrite(cksum, 1, 64, diff_file) != 64)
             return QBERR_IOERR;
         if(fwrite(new, 1, new_size, diff_file) != new_size)
             return QBERR_IOERR;
@@ -539,10 +553,12 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
     // TODO: Account for compression.
     if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
         sfwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
+        sfwrite(cksum, 1, 64, diff_file);
         sfwrite(new, 1, new_size, diff_file);
         return QBERR_OK;
     } else {
         sfwrite(QBDIFF_MAGIC_BIG, 1, 5, diff_file);
+        sfwrite(cksum, 1, 64, diff_file);
         uint8_t buf[8];
         wi64(old_size, buf);
         sfwrite(buf, 1, 8, diff_file);
@@ -574,23 +590,27 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
 int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
                  FILE * new_file) {
     // Check magic
-    if (patch_len < 5)
+    if (patch_len < 70)
         return QBERR_TRUNCPATCH;
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
-        if(fwrite(patch + 5, 1, patch_len - 5, new_file) != patch_len - 5)
+        char new_cksum[64];
+        blake2b_cksum(patch + 69, patch_len - 69, new_cksum);
+        if(memcmp(patch + 5, new_cksum, 64))
+            return QBERR_BADCKSUM;
+        if(fwrite(patch + 69, 1, patch_len - 69, new_file) != patch_len - 69)
             return QBERR_IOERR;
         return QBERR_OK;
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
         if(patch_len < 45)
             return QBERR_TRUNCPATCH;
         int64_t cblen, dblen, eblen, new_size, old_size, i, ctrl[3];
-        old_size = ri64(patch + 5);
-        new_size = ri64(patch + 13);
-        cblen = ri64(patch + 21);
-        dblen = ri64(patch + 29);
-        eblen = ri64(patch + 37);
-        int64_t cb_off = 45;
+        old_size = ri64(patch + 69);
+        new_size = ri64(patch + 77);
+        cblen = ri64(patch + 85);
+        dblen = ri64(patch + 93);
+        eblen = ri64(patch + 101);
+        int64_t cb_off = 109;
         int64_t db_off = cb_off + cblen;
         int64_t eb_off = db_off + dblen;
         if(new_size < 0 || old_size < 0 || cblen < 0 || dblen < 0 || eblen < 0)
@@ -650,6 +670,13 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
             /* Adjust pointers */
             new_pos += ctrl[1];
             old_pos += ctrl[2];
+        }
+
+        char new_cksum[64];
+        blake2b_cksum(new_data, new_size, new_cksum);
+        if(memcmp(patch + 5, new_cksum, 64)) {
+            free(new_data);
+            return QBERR_BADCKSUM;
         }
 
         if(fwrite(new_data, 1, new_size, new_file) != new_size) {

@@ -49,7 +49,7 @@ int main(int argc, char * argv[]) {
     }
 
     int ret = qbdiff_patch(old_file.data, delta_file.data, old_file.length, delta_file.length, new_file);
-    if (ret) {
+    if (ret != QBERR_OK) {
         fprintf(stderr, "Failed to patch (error %d: %s)\n", ret, qbdiff_error(ret));
         return 1;
     }

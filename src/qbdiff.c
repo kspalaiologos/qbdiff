@@ -48,13 +48,13 @@ int main(int argc, char * argv[]) {
     }
 
     int ret = qbdiff_compute(old_file.data, new_file.data, old_file.length, new_file.length, delta_file);
-    if (ret) {
+    if (ret != QBERR_OK) {
         fprintf(stderr, "Failed to create delta (error %d: %s)\n", ret, qbdiff_error(ret));
         return 1;
     }
 
     close_out_file(delta_file);
-    
+
     unmap_file(old_file);
     unmap_file(new_file);
 
