@@ -140,6 +140,7 @@ static void search64(const int64_t * RESTRICT I, const uint8_t * RESTRICT old, i
 struct match_result {
     int64_t cblen, dblen, eblen;
     uint8_t *cb, *db, *eb;
+    int16_t error;
 };
 
 static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * RESTRICT old,
@@ -155,9 +156,44 @@ static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * R
 
     uint8_t *cb, *db, *eb;
 
+    struct match_result result;
+    result.cb = NULL;
+    result.db = NULL;
+    result.eb = NULL;
+    result.cblen = 0;
+    result.dblen = 0;
+    result.eblen = 0;
+    result.error = QBERR_OK;
+
     cb = malloc(new_size + new_size / 50 + 5);
+
+    if(cb == NULL) {
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.cb = cb;
+    }
+
     db = malloc(new_size + new_size / 50 + 5);
+
+    if(db == NULL) {
+        free(cb);
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.db = db;
+    }
+
     eb = malloc(new_size + new_size / 50 + 5);
+
+    if(eb == NULL) {
+        free(cb);
+        free(db);
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.eb = eb;
+    }
 
     while (new_pos < new_size) {
         int64_t old_score = 0;
@@ -264,7 +300,11 @@ static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * R
         }
     }
 
-    return (struct match_result){ .cblen = cblen, .dblen = dblen, .eblen = eblen };
+    result.cblen = cblen;
+    result.dblen = dblen;
+    result.eblen = eblen;
+
+    return result;
 }
 
 static struct match_result match64(const int64_t * RESTRICT I, const uint8_t * RESTRICT old,
@@ -280,9 +320,44 @@ static struct match_result match64(const int64_t * RESTRICT I, const uint8_t * R
 
     uint8_t *cb, *db, *eb;
 
+    struct match_result result;
+    result.cb = NULL;
+    result.db = NULL;
+    result.eb = NULL;
+    result.cblen = 0;
+    result.dblen = 0;
+    result.eblen = 0;
+    result.error = QBERR_OK;
+
     cb = malloc(new_size + new_size / 50 + 5);
+
+    if(cb == NULL) {
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.cb = cb;
+    }
+
     db = malloc(new_size + new_size / 50 + 5);
+
+    if(db == NULL) {
+        free(cb);
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.db = db;
+    }
+
     eb = malloc(new_size + new_size / 50 + 5);
+
+    if(eb == NULL) {
+        free(cb);
+        free(db);
+        result.error = QBERR_NOMEM;
+        return result;
+    } else {
+        result.eb = eb;
+    }
 
     while (new_pos < new_size) {
         int64_t old_score = 0;
@@ -389,13 +464,23 @@ static struct match_result match64(const int64_t * RESTRICT I, const uint8_t * R
         }
     }
 
-    return (struct match_result){ .cblen = cblen, .dblen = dblen, .eblen = eblen };
+    result.cblen = cblen;
+    result.dblen = dblen;
+    result.eblen = eblen;
+
+    return result;
 }
 
 static struct match_result diff(const uint8_t * old, const uint8_t * new, const size_t old_size,
                                 const size_t new_size) {
     if (old_size < INT32_MAX - 8) {
         int32_t * I = malloc((old_size + 1) * sizeof(int32_t));
+
+        if(I == NULL) {
+            struct match_result ml = {0};
+            ml.error = QBERR_NOMEM;
+            return ml;
+        }
 
 #if defined(_OPENMP)
         libsais_omp(old, I, old_size, 1, NULL, 0);
@@ -410,6 +495,12 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
         return ml;
     } else {
         int64_t * I = malloc((old_size + 1) * sizeof(int64_t));
+
+        if(I == NULL) {
+            struct match_result ml = {0};
+            ml.error = QBERR_NOMEM;
+            return ml;
+        }
 
 #if defined(_OPENMP)
         libsais64_omp(old, I, old_size, 1, NULL, 0);
@@ -429,49 +520,69 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
                    FILE * diff_file) {
     if (old_size == 0) {
         // Handle the case where the old file is empty.
-        fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
-        fwrite(old, 1, old_size, diff_file);
-        return 0;
+        if(fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5)
+            return QBERR_IOERR;
+        if(fwrite(new, 1, new_size, diff_file) != new_size)
+            return QBERR_IOERR;
+        return QBERR_OK;
     }
 
     struct match_result ml = diff(old, new, old_size, new_size);
 
+    if(ml.error != QBERR_OK)
+        return ml.error;
+
+    #define sfwrite(ptr, size, nmemb, stream) \
+        if(fwrite(ptr, size, nmemb, stream) != nmemb) \
+            goto io_err
+
     // TODO: Account for compression.
     if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
-        fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
-        fwrite(old, 1, old_size, diff_file);
+        sfwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
+        sfwrite(new, 1, new_size, diff_file);
+        return QBERR_OK;
     } else {
-        fwrite(QBDIFF_MAGIC_BIG, 1, 5, diff_file);
+        sfwrite(QBDIFF_MAGIC_BIG, 1, 5, diff_file);
         uint8_t buf[8];
         wi64(old_size, buf);
-        fwrite(buf, 1, 8, diff_file);
+        sfwrite(buf, 1, 8, diff_file);
         wi64(new_size, buf);
-        fwrite(buf, 1, 8, diff_file);
+        sfwrite(buf, 1, 8, diff_file);
         wi64(ml.cblen, buf);
-        fwrite(buf, 1, 8, diff_file);
+        sfwrite(buf, 1, 8, diff_file);
         wi64(ml.dblen, buf);
-        fwrite(buf, 1, 8, diff_file);
+        sfwrite(buf, 1, 8, diff_file);
         wi64(ml.eblen, buf);
-        fwrite(buf, 1, 8, diff_file);
-        fwrite(ml.cb, 1, ml.cblen, diff_file);
-        fwrite(ml.db, 1, ml.dblen, diff_file);
-        fwrite(ml.eb, 1, ml.eblen, diff_file);
+        sfwrite(buf, 1, 8, diff_file);
+        sfwrite(ml.cb, 1, ml.cblen, diff_file);
+        sfwrite(ml.db, 1, ml.dblen, diff_file);
+        sfwrite(ml.eb, 1, ml.eblen, diff_file);
     }
 
     free(ml.cb);
     free(ml.db);
     free(ml.eb);
-    return 0;
+    return QBERR_OK;
+
+    io_err:
+        free(ml.cb);
+        free(ml.db);
+        free(ml.eb);
+        return QBERR_IOERR;
 }
 
 int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
                  FILE * new_file) {
     // Check magic
+    if (patch_len < 5)
+        return QBERR_TRUNCPATCH;
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
         fwrite(patch + 5, 1, patch_len - 5, new_file);
         return 0;
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
+        if(patch_len < 45)
+            return QBERR_TRUNCPATCH;
         int64_t cblen, dblen, eblen, new_size, old_size, i, ctrl[3];
         old_size = ri64(patch + 5);
         new_size = ri64(patch + 13);
@@ -481,8 +592,14 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         int64_t cb_off = 45;
         int64_t db_off = cb_off + cblen;
         int64_t eb_off = db_off + dblen;
+        if(new_size < 0 || old_size < 0 || cblen < 0 || dblen < 0 || eblen < 0)
+            return QBERR_TRUNCPATCH;
+        if(eb_off + eblen != patch_len)
+            return QBERR_TRUNCPATCH;
         int64_t old_pos = 0, new_pos = 0;
         uint8_t * new_data = malloc(new_size);
+        if(new_data == NULL)
+            return QBERR_NOMEM;
         memset(new_data, 0, new_size);
         while (new_pos < new_size) {
             for (i = 0; i <= 2; i++) {
@@ -491,12 +608,14 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
             }
 
             if (ctrl[0] < 0 || ctrl[1] < 0) {
-                printf("itsy bitsy teeny weeny light grey issuey\n");
+                free(new_data);
+                return QBERR_BADPATCH;
             }
 
             /* Sanity-check */
             if (new_pos + ctrl[0] > new_size || ctrl[0] < 0 || new_pos + ctrl[0] < 0) {
-                printf("bloody hell!\n");
+                free(new_data);
+                return QBERR_BADPATCH;
             }
 
             memcpy(new_data + new_pos, patch + db_off, ctrl[0]);
@@ -515,10 +634,12 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
 
             /* Sanity-check */
             if (new_pos + ctrl[1] > new_size || ctrl[1] < 0 || new_pos + ctrl[1] < 0) {
-                printf("oi mate, you can't park here!\n");
+                free(new_data);
+                return QBERR_BADPATCH;
             }
             if (old_pos + ctrl[2] > old_size || old_pos + ctrl[2] < 0) {
-                printf("crap.\n");
+                free(new_data);
+                return QBERR_BADPATCH;
             }
 
             /* Read extra string */
@@ -533,12 +654,27 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         fwrite(new_data, 1, new_size, new_file);
         free(new_data);
     } else {
-        printf("bollocks\n");
+        return QBERR_BADPATCH;
     }
 
-    return 0;
+    return QBERR_OK;
 }
 
 const char * qbdiff_version(void) { return VERSION; }
 
-const char * qbdiff_error(int code) { return "unexpected item in the bagging area."; }
+const char * qbdiff_error(int code) {
+    switch(code) {
+        case QBERR_OK:
+            return "No error";
+        case QBERR_NOMEM:
+            return "Out of memory";
+        case QBERR_IOERR:
+            return "I/O error";
+        case QBERR_BADPATCH:
+            return "Bad patch";
+        case QBERR_TRUNCPATCH:
+            return "Truncated patch";
+        default:
+            return "Unknown error";
+    }
+}

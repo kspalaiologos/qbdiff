@@ -72,20 +72,20 @@ struct file_mapping map_file(char * path) {
     struct file_mapping mapping = { 0 };
     HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file == INVALID_HANDLE_VALUE) {
-        return mapping;
+        fprintf(stderr, "Could not open file '%s'.\n", path);
+        exit(1);
     }
 
     HANDLE mapping_handle = CreateFileMapping(file, NULL, PAGE_READONLY, 0, 0, NULL);
     if (mapping_handle == NULL) {
-        CloseHandle(file);
-        return mapping;
+        fprintf(stderr, "Could not create file mapping for '%s'.\n", path);
+        exit(1);
     }
 
     mapping.data = MapViewOfFile(mapping_handle, FILE_MAP_READ, 0, 0, 0);
     if (mapping.data == NULL) {
-        CloseHandle(mapping_handle);
-        CloseHandle(file);
-        return mapping;
+        fprintf(stderr, "Could not map file '%s'.\n", path);
+        exit(1);
     }
 
     mapping.length = GetFileSize(file, NULL);
@@ -110,19 +110,20 @@ struct file_mapping map_file(char * path) {
     struct file_mapping mapping = { 0 };
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
-        return mapping;
+        fprintf(stderr, "Could not open file '%s'.\n", path);
+        exit(1);
     }
 
     struct stat st;
     if (fstat(fd, &st) == -1) {
-        close(fd);
-        return mapping;
+        fprintf(stderr, "Could not stat file '%s'.\n", path);
+        exit(1);
     }
 
     mapping.data = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (mapping.data == MAP_FAILED) {
-        close(fd);
-        return mapping;
+        fprintf(stderr, "Could not map file '%s'.\n", path);
+        exit(1);
     }
 
     mapping.length = st.st_size;

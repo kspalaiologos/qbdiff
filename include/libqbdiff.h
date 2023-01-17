@@ -26,6 +26,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define QBERR_OK 0
+#define QBERR_NOMEM 1
+#define QBERR_IOERR 2
+#define QBERR_TRUNCPATCH 3
+#define QBERR_BADPATCH 4
+
 int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_len, size_t new_len, FILE * diff_file);
 int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len, FILE * new_file);
 const char * qbdiff_version(void);
