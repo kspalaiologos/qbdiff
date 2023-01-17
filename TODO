@@ -1,4 +1,3 @@
 
 - Provide a possibility for static linking.
-- Error checking.
-- Add compression using either LZFSE or LZHAM. Maybe LZMA if desperate :).
+- Add compression (WIP).

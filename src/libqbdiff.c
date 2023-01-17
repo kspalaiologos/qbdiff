@@ -529,7 +529,7 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
 
 int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size,
                    FILE * diff_file) {
-    char cksum[64];
+    uint8_t cksum[64];
     blake2b_cksum(new, new_size, cksum);
 
     if (old_size == 0) {
@@ -541,8 +541,12 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         uint8_t * compressed = malloc(lzma_stream_buffer_bound(new_size));
         if(compressed == NULL)
             return QBERR_NOMEM;
-        int64_t compressed_len;
-        lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len);
+        size_t compressed_len;
+        lzma_ret result = lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len, lzma_stream_buffer_bound(new_size));
+        if(result != LZMA_OK) {
+            free(compressed);
+            return QBERR_LZMAERR;
+        }
         uint8_t buf[8];
         wi64(new_size, buf);
         if(fwrite(buf, 1, 8, diff_file) != 8) {
@@ -575,8 +579,12 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         uint8_t * compressed = malloc(lzma_stream_buffer_bound(new_size));
         if(compressed == NULL)
             goto oom_err;
-        int64_t compressed_len;
-        lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len);
+        size_t compressed_len;
+        lzma_ret result = lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len, lzma_stream_buffer_bound(new_size));
+        if(result != LZMA_OK) {
+            free(compressed);
+            return QBERR_LZMAERR;
+        }
         uint8_t buf[8];
         wi64(new_size, buf);
         if(fwrite(buf, 1, 8, diff_file) != 8) {
@@ -632,7 +640,7 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         return QBERR_TRUNCPATCH;
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
-        char new_cksum[64];
+        uint8_t new_cksum[64];
         blake2b_cksum(patch + 77, patch_len - 77, new_cksum);
         if(memcmp(patch + 5, new_cksum, 64))
             return QBERR_BADCKSUM;
@@ -642,8 +650,12 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         if(uncompressed == NULL)
             return QBERR_NOMEM;
         size_t in_pos = 0, out_pos = 0;
-        lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + 77, &in_pos, patch_len - 77, uncompressed, &out_pos, uncompressed_size);
-        if(fwrite(output, 1, out_pos, new_file) != out_pos) {
+        lzma_ret result = lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + 77, &in_pos, patch_len - 77, uncompressed, &out_pos, uncompressed_size);
+        if(result != LZMA_OK) {
+            free(uncompressed);
+            return QBERR_LZMAERR;
+        }
+        if(fwrite(uncompressed, 1, out_pos, new_file) != out_pos) {
             free(uncompressed);
             return QBERR_IOERR;
         }
@@ -722,7 +734,7 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
             old_pos += ctrl[2];
         }
 
-        char new_cksum[64];
+        uint8_t new_cksum[64];
         blake2b_cksum(new_data, new_size, new_cksum);
         if(memcmp(patch + 5, new_cksum, 64)) {
             free(new_data);

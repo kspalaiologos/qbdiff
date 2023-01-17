@@ -92,6 +92,11 @@ static FILE * open_output(char * output) {
     return output_des;
 }
 
+#ifdef __linux__
+    // Needed for fsync.
+    #include <unistd.h>
+#endif
+
 // Sync the data to disk using fsync.
 static void close_out_file(FILE * des) {
     if (des) {
