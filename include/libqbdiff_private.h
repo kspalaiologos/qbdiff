@@ -24,6 +24,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -53,6 +54,72 @@ static inline void wi64(int64_t x, uint8_t * buf) {
 static inline int64_t ri64(const uint8_t * buf) {
     return ((int64_t)buf[0] << 56) | ((int64_t)buf[1] << 48) | ((int64_t)buf[2] << 40) | ((int64_t)buf[3] << 32) |
            ((int64_t)buf[4] << 24) | ((int64_t)buf[5] << 16) | ((int64_t)buf[6] << 8) | (int64_t)buf[7];
+}
+
+// Open the binary output file.
+#ifdef __linux__
+#include <sys/stat.h>
+
+static int is_dir(const char * path) {
+    struct stat sb;
+    if (stat(path, &sb) == 0 && S_ISDIR(sb.st_mode)) return 1;
+    return 0;
+}
+#else
+#include <windows.h>
+
+static int is_dir(const char * path) {
+    DWORD attr = GetFileAttributes(path);
+    if (attr == INVALID_FILE_ATTRIBUTES) return 0;
+    return (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+#endif
+
+static FILE * open_output(char * output) {
+    FILE * output_des = NULL;
+
+    if (is_dir(output)) {
+        fprintf(stderr, "Error: output file `%s' is a directory.\n", output);
+        exit(1);
+    }
+
+    output_des = fopen(output, "wb");
+    if (output_des == NULL) {
+        fprintf(stderr, "Error: failed to open output file `%s': %s\n", output, strerror(errno));
+        exit(1);
+    }
+
+    return output_des;
+}
+
+// Sync the data to disk using fsync.
+static void close_out_file(FILE * des) {
+    if (des) {
+        if (fflush(des)) {
+            fprintf(stderr, "Error: Failed on fflush: %s\n", strerror(errno));
+            exit(1);
+        }
+
+#ifdef __linux__
+        int outfd = fileno(des);
+
+        while (1) {
+            int status = fsync(outfd);
+            if (status == -1) {
+                if (errno == EINVAL) break;
+                if (errno == EINTR) continue;
+                fprintf(stderr, "Error: Failed on fsync: %s\n", strerror(errno));
+                exit(1);
+            }
+            break;
+        }
+#endif
+
+        if (fclose(des)) {
+            fprintf(stderr, "Error: Failed on fclose: %s\n", strerror(errno));
+            exit(1);
+        }
+    }
 }
 
 // Supply a slightly cross-platform file mapping utility.

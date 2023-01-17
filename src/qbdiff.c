@@ -53,7 +53,8 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    fclose(delta_file);
+    close_out_file(delta_file);
+    
     unmap_file(old_file);
     unmap_file(new_file);
 

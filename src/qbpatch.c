@@ -54,7 +54,7 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    fclose(new_file);
+    close_out_file(new_file);
 
     unmap_file(old_file);
     unmap_file(delta_file);

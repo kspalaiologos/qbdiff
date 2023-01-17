@@ -578,8 +578,9 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         return QBERR_TRUNCPATCH;
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
-        fwrite(patch + 5, 1, patch_len - 5, new_file);
-        return 0;
+        if(fwrite(patch + 5, 1, patch_len - 5, new_file) != patch_len - 5)
+            return QBERR_IOERR;
+        return QBERR_OK;
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
         if(patch_len < 45)
             return QBERR_TRUNCPATCH;
@@ -651,7 +652,10 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
             old_pos += ctrl[2];
         }
 
-        fwrite(new_data, 1, new_size, new_file);
+        if(fwrite(new_data, 1, new_size, new_file) != new_size) {
+            free(new_data);
+            return QBERR_IOERR;
+        }
         free(new_data);
     } else {
         return QBERR_BADPATCH;
