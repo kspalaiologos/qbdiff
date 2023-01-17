@@ -7,10 +7,10 @@ EXTRA_DIST = LICENSE 3rdparty/libsais-LICENSE README.md build-aux/git-version-ge
 pkgconfig_DATA = qbdiff.pc
 
 include_HEADERS = include/libqbdiff.h
-noinst_HEADERS = include/libqbdiff_private.h include/libsais.h
+noinst_HEADERS = include/libqbdiff_private.h include/libsais.h include/libsais64.h include/blake2b.h
 
 lib_LTLIBRARIES = libqbdiff.la
-libqbdiff_la_SOURCES = src/libqbdiff.c src/libsais.c
+libqbdiff_la_SOURCES = src/libqbdiff.c src/libsais.c src/libsais64.c src/blake2b.c
 libqbdiff_la_LDFLAGS = -no-undefined -version-info 0:0:0
 
 bin_PROGRAMS = qbdiff qbpatch
@@ -52,9 +52,9 @@ dist-hook:
 # Begin developer convenience targets
 
 .PHONY: format
-format: $(qbdiff_SOURCES) $(qbpatch_SOURCES) $(libqbdiff_SOURCES) $(include_HEADERS) $(noinst_HEADERS)
-	clang-format -i $^ examples/*.c
+format: $(qbdiff_SOURCES) $(qbpatch_SOURCES) $(libqbdiff_la_SOURCES) $(include_HEADERS) $(noinst_HEADERS)
+	clang-format -i $^
 
 .PHONY: cloc
-cloc: $(qbdiff_SOURCES) $(qbpatch_SOURCES) $(libqbdiff_SOURCES) $(include_HEADERS) $(noinst_HEADERS)
+cloc: $(qbdiff_SOURCES) $(qbpatch_SOURCES) $(libqbdiff_la_SOURCES) $(include_HEADERS) $(noinst_HEADERS)
 	cloc $^

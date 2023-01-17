@@ -1,7 +1,7 @@
 /*
  * qbdiff - Quick Binary Diff
  * Copyright (C) 2023 Kamila Szewczyk
- * 
+ *
  * Based on the algorithm developed by Colin Percival:
  * Copyright (C) 2003-2005 Colin Percival
  *
@@ -44,16 +44,6 @@ int main(int argc, char * argv[]) {
     FILE * delta_file = fopen(argv[3], "wb");
     if (!delta_file) {
         fprintf(stderr, "Failed to open delta file %s for writing: %s\n", argv[3], strerror(errno));
-        return 1;
-    }
-
-    if(old_file.length > INT32_MAX - 1) {
-        fprintf(stderr, "NYI: Old file over 2 gigabytes, refusing to diff.\n");
-        return 1;
-    }
-
-    if(new_file.length > INT32_MAX - 1) {
-        fprintf(stderr, "NYI: New file over 2 gigabytes, refusing to diff.\n");
         return 1;
     }
 

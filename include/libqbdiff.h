@@ -1,7 +1,7 @@
 /*
  * qbdiff - Quick Binary Diff
  * Copyright (C) 2023 Kamila Szewczyk
- * 
+ *
  * Based on the algorithm developed by Colin Percival:
  * Copyright (C) 2003-2005 Colin Percival
  *
@@ -22,9 +22,9 @@
 #ifndef LIBQBDIFF_H
 #define LIBQBDIFF_H
 
-#include <stdio.h>
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_len, size_t new_len, FILE * diff_file);
 int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len, FILE * new_file);

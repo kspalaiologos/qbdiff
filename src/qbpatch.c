@@ -1,7 +1,7 @@
 /*
  * qbdiff - Quick Binary Diff
  * Copyright (C) 2023 Kamila Szewczyk
- * 
+ *
  * Based on the algorithm developed by Colin Percival:
  * Copyright (C) 2003-2005 Colin Percival
  *

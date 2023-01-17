@@ -1,7 +1,7 @@
 /*
  * qbdiff - Quick Binary Diff
  * Copyright (C) 2023 Kamila Szewczyk
- * 
+ *
  * Based on the algorithm developed by Colin Percival:
  * Copyright (C) 2003-2005 Colin Percival
  *
@@ -31,6 +31,10 @@
     #define RESTRICT
 #endif
 
+#ifndef VERSION
+    #define VERSION "0.0.0"
+#endif
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
@@ -57,15 +61,15 @@ struct file_mapping {
     uint8_t * data;
     size_t length;
 
-    void * h1, * h2;
+    void *h1, *h2;
 };
 
 #ifdef _WIN32
 
-#include <windows.h>
+    #include <windows.h>
 
 struct file_mapping map_file(char * path) {
-    struct file_mapping mapping = {0};
+    struct file_mapping mapping = { 0 };
     HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file == INVALID_HANDLE_VALUE) {
         return mapping;
@@ -96,14 +100,14 @@ void unmap_file(struct file_mapping mapping) {
 
 #else
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <fcntl.h>
+    #include <fcntl.h>
+    #include <sys/mman.h>
+    #include <sys/stat.h>
+    #include <sys/types.h>
+    #include <unistd.h>
 
 struct file_mapping map_file(char * path) {
-    struct file_mapping mapping = {0};
+    struct file_mapping mapping = { 0 };
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
         return mapping;

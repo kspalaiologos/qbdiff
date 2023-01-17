@@ -1,4 +1,4 @@
 
 - Provide a possibility for static linking.
-- Check in libsais64 to support files larger than 64-bit.
 - Error checking.
+- Add compression using either LZFSE or LZHAM. Maybe LZMA if desperate :).

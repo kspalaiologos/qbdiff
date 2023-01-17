@@ -1,7 +1,7 @@
 /*
  * qbdiff - Quick Binary Diff
  * Copyright (C) 2023 Kamila Szewczyk
- * 
+ *
  * Based on the algorithm developed by Colin Percival:
  * Copyright (C) 2003-2005 Colin Percival
  *
@@ -28,19 +28,22 @@
 
 #include "libqbdiff_private.h"
 #include "libsais.h"
+#include "libsais64.h"
 
 #define QBDIFF_MAGIC_BIG "QBDB1"
 #define QBDIFF_MAGIC_FULL "QBDF1"
 
-static int64_t matchlen(const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new, int64_t new_size) {
+static int64_t matchlen(const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new,
+                        int64_t new_size) {
     int64_t i, end = min(old_size, new_size);
     for (i = 0; i < end; i++)
         if (old[i] != new[i]) break;
     return i;
 }
 
-static void search(const int32_t * RESTRICT I, const uint8_t * RESTRICT old, int64_t old_size, const uint8_t * RESTRICT new, int64_t new_size, int64_t st,
-                   int64_t en, int64_t * old_pos, int64_t * max_len) {
+static void search32(const int32_t * RESTRICT I, const uint8_t * RESTRICT old, int64_t old_size,
+                     const uint8_t * RESTRICT new, int64_t new_size, int64_t st, int64_t en, int64_t * old_pos,
+                     int64_t * max_len) {
     int64_t x, y;
 
     /* Initialize max_len for the binary search */
@@ -80,35 +83,77 @@ static void search(const int32_t * RESTRICT I, const uint8_t * RESTRICT old, int
 
     /* Determine how to continue the binary search */
     if (memcmp(oldoffset, new, length) < 0) {
-        return search(I, old, old_size, new, new_size, x, en, old_pos, max_len);
+        return search32(I, old, old_size, new, new_size, x, en, old_pos, max_len);
     } else {
-        return search(I, old, old_size, new, new_size, st, x, old_pos, max_len);
+        return search32(I, old, old_size, new, new_size, st, x, old_pos, max_len);
     }
 }
 
-int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size, FILE * diff_file) {
-    if (old_size == 0) {
-        // Handle the case where the old file is empty.
-        fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
-        fwrite(old, 1, old_size, diff_file);
-        return 0;
+static void search64(const int64_t * RESTRICT I, const uint8_t * RESTRICT old, int64_t old_size,
+                     const uint8_t * RESTRICT new, int64_t new_size, int64_t st, int64_t en, int64_t * old_pos,
+                     int64_t * max_len) {
+    int64_t x, y;
+
+    /* Initialize max_len for the binary search */
+    if (st == 0 && en == old_size) {
+        *max_len = matchlen(old, old_size, new, new_size);
+        *old_pos = I[st];
     }
-    int32_t * I = malloc((old_size + 1) * sizeof(int32_t));
 
-    #if defined(_OPENMP)
-        libsais_omp(old, I, old_size, 1, NULL, 0);
-    #else
-        libsais(old, I, old_size, 1, NULL);
-    #endif
+    /* The binary search terminates here when "en" and "st" are adjacent
+     * indices in the suffix-sorted array. */
+    if (en - st < 2) {
+        x = matchlen(old + I[st], old_size - I[st], new, new_size);
+        if (x > *max_len) {
+            *max_len = x;
+            *old_pos = I[st];
+        }
+        y = matchlen(old + I[en], old_size - I[en], new, new_size);
+        if (y > *max_len) {
+            *max_len = y;
+            *old_pos = I[en];
+        }
 
+        return;
+    }
+
+    x = st + (en - st) / 2;
+
+    int64_t length = min(old_size - I[x], new_size);
+    const uint8_t * oldoffset = old + I[x];
+
+    /* This match *could* be the longest one, so check for that here */
+    int64_t tmp = matchlen(oldoffset, length, new, length);
+    if (tmp > *max_len) {
+        *max_len = tmp;
+        *old_pos = I[x];
+    }
+
+    /* Determine how to continue the binary search */
+    if (memcmp(oldoffset, new, length) < 0) {
+        return search64(I, old, old_size, new, new_size, x, en, old_pos, max_len);
+    } else {
+        return search64(I, old, old_size, new, new_size, st, x, old_pos, max_len);
+    }
+}
+
+struct match_result {
+    int64_t cblen, dblen, eblen;
     uint8_t *cb, *db, *eb;
-    int64_t cblen = 0, dblen = 0, eblen = 0;
+};
+
+static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * RESTRICT old,
+                                   const uint8_t * RESTRICT new, int64_t new_size, int64_t old_size) {
     int64_t new_pos = 0;
     int64_t old_pos = 0;
     int64_t match_len = 0;
+    int64_t last_offset = 0;
     int64_t last_new_pos = 0;
     int64_t last_old_pos = 0;
-    int64_t last_offset = 0;
+
+    int64_t cblen = 0, dblen = 0, eblen = 0;
+
+    uint8_t *cb, *db, *eb;
 
     cb = malloc(new_size + new_size / 50 + 5);
     db = malloc(new_size + new_size / 50 + 5);
@@ -118,7 +163,7 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         int64_t old_score = 0;
         int64_t new_peek;
         for (new_peek = new_pos += match_len; new_pos < new_size; new_pos++) {
-            search(I, old, old_size, new + new_pos, new_size - new_pos, 0, old_size, &old_pos, &match_len);
+            search32(I, old, old_size, new + new_pos, new_size - new_pos, 0, old_size, &old_pos, &match_len);
 
             for (; new_peek < new_pos + match_len; new_peek++) {
                 if ((new_peek + last_offset < old_size) && (old[new_peek + last_offset] == new[new_peek])) {
@@ -219,10 +264,180 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         }
     }
 
-    free(I);
+    return (struct match_result){ .cblen = cblen, .dblen = dblen, .eblen = eblen };
+}
+
+static struct match_result match64(const int64_t * RESTRICT I, const uint8_t * RESTRICT old,
+                                   const uint8_t * RESTRICT new, int64_t new_size, int64_t old_size) {
+    int64_t new_pos = 0;
+    int64_t old_pos = 0;
+    int64_t match_len = 0;
+    int64_t last_offset = 0;
+    int64_t last_new_pos = 0;
+    int64_t last_old_pos = 0;
+
+    int64_t cblen = 0, dblen = 0, eblen = 0;
+
+    uint8_t *cb, *db, *eb;
+
+    cb = malloc(new_size + new_size / 50 + 5);
+    db = malloc(new_size + new_size / 50 + 5);
+    eb = malloc(new_size + new_size / 50 + 5);
+
+    while (new_pos < new_size) {
+        int64_t old_score = 0;
+        int64_t new_peek;
+        for (new_peek = new_pos += match_len; new_pos < new_size; new_pos++) {
+            search64(I, old, old_size, new + new_pos, new_size - new_pos, 0, old_size, &old_pos, &match_len);
+
+            for (; new_peek < new_pos + match_len; new_peek++) {
+                if ((new_peek + last_offset < old_size) && (old[new_peek + last_offset] == new[new_peek])) {
+                    old_score++;
+                }
+            }
+
+            if (((match_len == old_score) && (match_len != 0)) || (match_len > old_score + 8)) {
+                break;
+            }
+
+            // Before beginning the next loop iteration, decrement
+            // old_score if needed, since new_pos will be
+            // incremented.
+            if ((new_pos + last_offset < old_size) && (old[new_pos + last_offset] == new[new_pos])) {
+                old_score--;
+            }
+        }
+
+        if ((match_len != old_score) || (new_pos == new_size)) {
+            int64_t bytes = 0, max = 0;
+            int64_t len_fuzzyforward = 0;
+            for (int64_t i = 0; (last_new_pos + i < new_pos) && (last_old_pos + i < old_size);) {
+                if (old[last_old_pos + i] == new[last_new_pos + i]) {
+                    bytes++;
+                }
+                i++;
+                if (bytes * 2 - i > max * 2 - len_fuzzyforward) {
+                    max = bytes;
+                    len_fuzzyforward = i;
+                }
+            }
+
+            int64_t len_fuzzybackward = 0;
+            if (new_pos < new_size) {
+                bytes = 0;
+                max = 0;
+                for (int64_t i = 1; (new_pos >= last_new_pos + i) && (old_pos >= i); i++) {
+                    if (old[old_pos - i] == new[new_pos - i]) {
+                        bytes++;
+                    }
+                    if (bytes * 2 - i > max * 2 - len_fuzzybackward) {
+                        max = bytes;
+                        len_fuzzybackward = i;
+                    }
+                }
+            }
+
+            // If there is an overlap between len_fuzzyforward and
+            // len_fuzzybackward in the new file, that overlap must
+            // be eliminated.
+            if (last_new_pos + len_fuzzyforward > new_pos - len_fuzzybackward) {
+                bytes = 0;
+                max = 0;
+                int64_t overlap = (last_new_pos + len_fuzzyforward) - (new_pos - len_fuzzybackward);
+                int64_t len_fuzzyshift = 0;
+                for (int64_t i = 0; i < overlap; i++) {
+                    if (new[last_new_pos + len_fuzzyforward - overlap + i] ==
+                        old[last_old_pos + len_fuzzyforward - overlap + i]) {
+                        bytes++;
+                    }
+                    if (new[new_pos - len_fuzzybackward + i] == old[old_pos - len_fuzzybackward + i]) {
+                        bytes--;
+                    }
+                    if (bytes > max) {
+                        max = bytes;
+                        len_fuzzyshift = i + 1;
+                    }
+                }
+
+                len_fuzzyforward += len_fuzzyshift - overlap;
+                len_fuzzybackward -= len_fuzzyshift;
+            }
+
+            for (int64_t i = 0; i < len_fuzzyforward; i++) {
+                db[dblen + i] = new[last_new_pos + i] - old[last_old_pos + i];
+            }
+
+            for (int64_t i = 0; i < (new_pos - len_fuzzybackward) - (last_new_pos + len_fuzzyforward); i++) {
+                eb[eblen + i] = new[last_new_pos + len_fuzzyforward + i];
+            }
+
+            dblen += len_fuzzyforward;
+            eblen += (new_pos - len_fuzzybackward) - (last_new_pos + len_fuzzyforward);
+
+            wi64(len_fuzzyforward, cb + cblen);
+            cblen += 8;
+
+            wi64((new_pos - len_fuzzybackward) - (last_new_pos + len_fuzzyforward), cb + cblen);
+            cblen += 8;
+
+            wi64((old_pos - len_fuzzybackward) - (last_old_pos + len_fuzzyforward), cb + cblen);
+            cblen += 8;
+
+            last_new_pos = new_pos - len_fuzzybackward;
+            last_old_pos = old_pos - len_fuzzybackward;
+            last_offset = old_pos - new_pos;
+        }
+    }
+
+    return (struct match_result){ .cblen = cblen, .dblen = dblen, .eblen = eblen };
+}
+
+static struct match_result diff(const uint8_t * old, const uint8_t * new, const size_t old_size,
+                                const size_t new_size) {
+    if (old_size < INT32_MAX - 8) {
+        int32_t * I = malloc((old_size + 1) * sizeof(int32_t));
+
+#if defined(_OPENMP)
+        libsais_omp(old, I, old_size, 1, NULL, 0);
+#else
+        libsais(old, I, old_size, 1, NULL);
+#endif
+
+        struct match_result ml = match32(I, old, new, new_size, old_size);
+
+        free(I);
+
+        return ml;
+    } else {
+        int64_t * I = malloc((old_size + 1) * sizeof(int64_t));
+
+#if defined(_OPENMP)
+        libsais64_omp(old, I, old_size, 1, NULL, 0);
+#else
+        libsais64(old, I, old_size, 1, NULL);
+#endif
+
+        struct match_result ml = match64(I, old, new, new_size, old_size);
+
+        free(I);
+
+        return ml;
+    }
+}
+
+int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size,
+                   FILE * diff_file) {
+    if (old_size == 0) {
+        // Handle the case where the old file is empty.
+        fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
+        fwrite(old, 1, old_size, diff_file);
+        return 0;
+    }
+
+    struct match_result ml = diff(old, new, old_size, new_size);
 
     // TODO: Account for compression.
-    if (cblen + dblen + eblen > 2 * new_size) {
+    if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
         fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
         fwrite(old, 1, old_size, diff_file);
     } else {
@@ -232,24 +447,25 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         fwrite(buf, 1, 8, diff_file);
         wi64(new_size, buf);
         fwrite(buf, 1, 8, diff_file);
-        wi64(cblen, buf);
+        wi64(ml.cblen, buf);
         fwrite(buf, 1, 8, diff_file);
-        wi64(dblen, buf);
+        wi64(ml.dblen, buf);
         fwrite(buf, 1, 8, diff_file);
-        wi64(eblen, buf);
+        wi64(ml.eblen, buf);
         fwrite(buf, 1, 8, diff_file);
-        fwrite(cb, 1, cblen, diff_file);
-        fwrite(db, 1, dblen, diff_file);
-        fwrite(eb, 1, eblen, diff_file);
+        fwrite(ml.cb, 1, ml.cblen, diff_file);
+        fwrite(ml.db, 1, ml.dblen, diff_file);
+        fwrite(ml.eb, 1, ml.eblen, diff_file);
     }
 
-    free(cb);
-    free(db);
-    free(eb);
+    free(ml.cb);
+    free(ml.db);
+    free(ml.eb);
     return 0;
 }
 
-int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len, FILE * new_file) {
+int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
+                 FILE * new_file) {
     // Check magic
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
