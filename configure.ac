@@ -15,6 +15,8 @@ PKG_INSTALLDIR
 AC_C_RESTRICT
 AC_OPENMP
 
+AC_CHECK_LIB(lzma, lzma_easy_buffer_encode, , AC_MSG_ERROR([Could not find lzma library - please install liblzma-dev]))
+
 AX_SUBST_TRANSFORMED_PACKAGE_NAME
 AX_SUBST_MAN_DATE
 

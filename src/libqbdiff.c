@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <lzma.h>
+
 #include "libqbdiff_private.h"
 #include "libsais.h"
 #include "libsais64.h"
@@ -536,8 +538,22 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
             return QBERR_IOERR;
         if(fwrite(cksum, 1, 64, diff_file) != 64)
             return QBERR_IOERR;
-        if(fwrite(new, 1, new_size, diff_file) != new_size)
+        uint8_t * compressed = malloc(lzma_stream_buffer_bound(new_size));
+        if(compressed == NULL)
+            return QBERR_NOMEM;
+        int64_t compressed_len;
+        lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len);
+        uint8_t buf[8];
+        wi64(new_size, buf);
+        if(fwrite(buf, 1, 8, diff_file) != 8) {
+            free(compressed);
             return QBERR_IOERR;
+        }
+        if(fwrite(compressed, 1, compressed_len, diff_file) != compressed_len) {
+            free(compressed);
+            return QBERR_IOERR;
+        }
+        free(compressed);
         return QBERR_OK;
     }
 
@@ -552,10 +568,26 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
 
     // TODO: Account for compression.
     if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
-        sfwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file);
-        sfwrite(cksum, 1, 64, diff_file);
-        sfwrite(new, 1, new_size, diff_file);
-        return QBERR_OK;
+        if(fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5)
+            goto io_err;
+        if(fwrite(cksum, 1, 64, diff_file) != 64)
+            goto io_err;
+        uint8_t * compressed = malloc(lzma_stream_buffer_bound(new_size));
+        if(compressed == NULL)
+            goto oom_err;
+        int64_t compressed_len;
+        lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, new, new_size, compressed, &compressed_len);
+        uint8_t buf[8];
+        wi64(new_size, buf);
+        if(fwrite(buf, 1, 8, diff_file) != 8) {
+            free(compressed);
+            goto io_err;
+        }
+        if(fwrite(compressed, 1, compressed_len, diff_file) != compressed_len) {
+            free(compressed);
+            goto io_err;
+        }
+        free(compressed);
     } else {
         sfwrite(QBDIFF_MAGIC_BIG, 1, 5, diff_file);
         sfwrite(cksum, 1, 64, diff_file);
@@ -585,6 +617,12 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         free(ml.db);
         free(ml.eb);
         return QBERR_IOERR;
+    
+    oom_err:
+        free(ml.cb);
+        free(ml.db);
+        free(ml.eb);
+        return QBERR_NOMEM;
 }
 
 int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
@@ -595,11 +633,21 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
         char new_cksum[64];
-        blake2b_cksum(patch + 69, patch_len - 69, new_cksum);
+        blake2b_cksum(patch + 77, patch_len - 77, new_cksum);
         if(memcmp(patch + 5, new_cksum, 64))
             return QBERR_BADCKSUM;
-        if(fwrite(patch + 69, 1, patch_len - 69, new_file) != patch_len - 69)
+        int64_t uncompressed_size = ri64(patch + 69);
+        uint64_t memlimit = UINT64_MAX;
+        uint8_t * uncompressed = malloc(uncompressed_size + 1);
+        if(uncompressed == NULL)
+            return QBERR_NOMEM;
+        size_t in_pos = 0, out_pos = 0;
+        lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + 77, &in_pos, patch_len - 77, uncompressed, &out_pos, uncompressed_size);
+        if(fwrite(output, 1, out_pos, new_file) != out_pos) {
+            free(uncompressed);
             return QBERR_IOERR;
+        }
+        free(uncompressed);
         return QBERR_OK;
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
         if(patch_len < 45)
@@ -610,6 +658,8 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         cblen = ri64(patch + 85);
         dblen = ri64(patch + 93);
         eblen = ri64(patch + 101);
+        if(old_size != old_len)
+            return QBERR_BADPATCH;
         int64_t cb_off = 109;
         int64_t db_off = cb_off + cblen;
         int64_t eb_off = db_off + dblen;
