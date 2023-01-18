@@ -22,9 +22,9 @@
 #ifndef LIBQBDIFF_PRIVATE_H
 #define LIBQBDIFF_PRIVATE_H
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -58,7 +58,7 @@ static inline int64_t ri64(const uint8_t * buf) {
 
 // Open the binary output file.
 #ifdef __linux__
-#include <sys/stat.h>
+    #include <sys/stat.h>
 
 static int is_dir(const char * path) {
     struct stat sb;
@@ -66,7 +66,7 @@ static int is_dir(const char * path) {
     return 0;
 }
 #else
-#include <windows.h>
+    #include <windows.h>
 
 static int is_dir(const char * path) {
     DWORD attr = GetFileAttributes(path);
