@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "blake2b.h"
@@ -38,16 +39,16 @@
 // LZMA wrappers with a sane API.
 
 static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int64_t * dest_written) {
-    static const lzma_options_lzma opt = {
-        1u << 20u, NULL, 0, LZMA_LC_DEFAULT, LZMA_LP_DEFAULT,
-        LZMA_PB_DEFAULT, LZMA_MODE_NORMAL, 273, LZMA_MF_BT4, 100
-    };
-    static const lzma_filter filters[] = {
-        { LZMA_FILTER_LZMA2, (lzma_options_lzma*) &opt },
+    lzma_options_lzma opt;
+    if(lzma_lzma_preset(&opt, 9 | LZMA_PRESET_EXTREME))
+        return QBERR_LZMAERR;
+
+    lzma_filter filters[] = {
+        { LZMA_FILTER_LZMA2, &opt },
         { LZMA_VLI_UNKNOWN, NULL }
     };
 
-    *dest = malloc(size);
+    *dest = malloc(src_size);
     if(!*dest) {
         *dest_written = 0;
         return QBERR_NOMEM;
@@ -55,10 +56,12 @@ static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int6
 
     lzma_ret ret;
 
-    ret = lzma_stream_buffer_encode((lzma_filter*) filters, LZMA_CHECK_CRC64, NULL,
+    ret = lzma_stream_buffer_encode(filters, LZMA_CHECK_CRC64, NULL,
                                     src, src_size, *dest, dest_written, src_size - 1);
     if (ret != LZMA_OK) {
+        printf("LZMA err: %d, tried to compress %d bytes from buffer %p to %p.\n", ret, src_size, src, *dest);
         free(*dest);
+        *dest = NULL;
         return QBERR_LZMAERR;
     }
 
@@ -67,16 +70,18 @@ static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int6
 
 static int decompress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int64_t dest_size) {
     *dest = malloc(dest_size + 1);
-    if(!*dest) {
-        *dest_written = 0;
+    if(!*dest)
         return QBERR_NOMEM;
-    }
 
     size_t mem_limit = UINT64_MAX;
     lzma_ret ret;
-    ret = lzma_stream_buffer_decode(&mem_limit, 0, NULL, src, src_size, *dest, dest_size);
-    if (ret != LZMA_OK)
+    size_t in_pos, out_pos;
+    ret = lzma_stream_buffer_decode(&mem_limit, 0, NULL, src, &in_pos, src_size, *dest, &out_pos, dest_size);
+    if (ret != LZMA_OK || in_pos != src_size || out_pos != dest_size) {
+        free(*dest);
+        *dest = NULL;
         return QBERR_LZMAERR;
+    }
 
     return QBERR_OK;
 }
@@ -626,7 +631,7 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
     if (err_code != QBERR_OK) goto err;
 
 #define sfwrite(ptr, size, nmemb, stream) \
-    if (fwrite(ptr, size, nmemb, stream) != nmemb) goto io_err
+    if (fwrite(ptr, size, nmemb, stream) != nmemb) { err_code = QBERR_IOERR; goto err; }
 
     // TODO: Account for compression.
     if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
@@ -739,7 +744,7 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         if(errn != QBERR_OK) goto err;
         errn = decompress(patch + eb_off, eblen, &eb, orig_eblen);
         if(errn != QBERR_OK) goto err;
-        
+
         memset(new_data, 0, new_size);
         cb_off = 0;
         db_off = 0;

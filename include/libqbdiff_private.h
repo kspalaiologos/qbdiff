@@ -140,7 +140,7 @@ struct file_mapping {
 
     #include <windows.h>
 
-struct file_mapping map_file(char * path) {
+static struct file_mapping map_file(char * path) {
     struct file_mapping mapping = { 0 };
     HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file == INVALID_HANDLE_VALUE) {
@@ -164,7 +164,7 @@ struct file_mapping map_file(char * path) {
     return mapping;
 }
 
-void unmap_file(struct file_mapping mapping) {
+static void unmap_file(struct file_mapping mapping) {
     UnmapViewOfFile(mapping.data);
     CloseHandle(mapping.h2);
     CloseHandle(mapping.h1);
@@ -178,7 +178,7 @@ void unmap_file(struct file_mapping mapping) {
     #include <sys/types.h>
     #include <unistd.h>
 
-struct file_mapping map_file(char * path) {
+static struct file_mapping map_file(char * path) {
     struct file_mapping mapping = { 0 };
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
@@ -204,7 +204,7 @@ struct file_mapping map_file(char * path) {
     return mapping;
 }
 
-void unmap_file(struct file_mapping mapping) {
+static void unmap_file(struct file_mapping mapping) {
     munmap(mapping.data, mapping.length);
     close((int)(intptr_t)mapping.h1);
 }
