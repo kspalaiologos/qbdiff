@@ -46,7 +46,7 @@
 
 static int compress(const uint8_t * src, size_t src_size, uint8_t ** dest, size_t * dest_written) {
     lzma_options_lzma opt;
-    if (lzma_lzma_preset(&opt, 9)) return QBERR_LZMAERR;
+    if (lzma_lzma_preset(&opt, 8)) return QBERR_LZMAERR;
 
     lzma_filter filters[] = { { LZMA_FILTER_LZMA2, &opt }, { LZMA_VLI_UNKNOWN, NULL } };
 
