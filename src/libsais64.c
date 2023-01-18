@@ -8515,3 +8515,42 @@ int64_t libsais64(const uint8_t * T, int64_t * SA, int64_t n, int64_t fs, int64_
 
     return libsais64_main(T, SA, n, 0, 0, NULL, fs, freq, 1);
 }
+
+#if defined(_OPENMP)
+
+int64_t libsais64_omp(const uint8_t * T, int64_t * SA, int64_t n, int64_t fs, int64_t * freq, int64_t threads) {
+    if ((T == NULL) || (SA == NULL) || (n < 0) || (fs < 0) || (threads < 0)) {
+        return -1;
+    } else if (n < 2) {
+        if (freq != NULL) {
+            memset(freq, 0, ALPHABET_SIZE * sizeof(int64_t));
+        }
+        if (n == 1) {
+            SA[0] = 0;
+            if (freq != NULL) {
+                freq[T[0]]++;
+            }
+        }
+        return 0;
+    }
+
+    threads = threads > 0 ? threads : omp_get_max_threads();
+
+    if (n <= INT32_MAX) {
+        sa_sint_t new_fs = (fs + fs + n + n) <= INT32_MAX ? (fs + fs + n) : INT32_MAX - n;
+        sa_sint_t index = libsais_omp(T, (int32_t *)SA, (int32_t)n, (int32_t)new_fs, (int32_t *)freq, (int32_t)threads);
+
+        if (index >= 0) {
+            libsais64_convert_inplace_32u_to_64u_omp((uint32_t *)SA, (uint64_t *)SA, n, threads);
+            if (freq != NULL) {
+                libsais64_convert_inplace_32u_to_64u_omp((uint32_t *)freq, (uint64_t *)freq, ALPHABET_SIZE, threads);
+            }
+        }
+
+        return index;
+    }
+
+    return libsais64_main(T, SA, n, 0, 0, NULL, fs, freq, threads);
+}
+
+#endif

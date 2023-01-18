@@ -8497,3 +8497,52 @@ int32_t libsais_ctx(const void * ctx, const uint8_t * T, int32_t * SA, int32_t n
 
     return libsais_main_ctx((const LIBSAIS_CONTEXT *)ctx, T, SA, n, 0, 0, NULL, fs, freq);
 }
+
+#if defined(_OPENMP)
+
+void * libsais_create_ctx_omp(int32_t threads) {
+    if (threads < 0) {
+        return NULL;
+    }
+
+    threads = threads > 0 ? threads : omp_get_max_threads();
+    return (void *)libsais_create_ctx_main(threads);
+}
+
+int32_t libsais_omp(const uint8_t * T, int32_t * SA, int32_t n, int32_t fs, int32_t * freq, int32_t threads) {
+    if ((T == NULL) || (SA == NULL) || (n < 0) || (fs < 0) || (threads < 0)) {
+        return -1;
+    } else if (n < 2) {
+        if (freq != NULL) {
+            memset(freq, 0, ALPHABET_SIZE * sizeof(int32_t));
+        }
+        if (n == 1) {
+            SA[0] = 0;
+            if (freq != NULL) {
+                freq[T[0]]++;
+            }
+        }
+        return 0;
+    }
+
+    threads = threads > 0 ? threads : omp_get_max_threads();
+
+    return libsais_main(T, SA, n, 0, 0, NULL, fs, freq, threads);
+}
+
+int32_t libsais_int_omp(int32_t * T, int32_t * SA, int32_t n, int32_t k, int32_t fs, int32_t threads) {
+    if ((T == NULL) || (SA == NULL) || (n < 0) || (fs < 0) || (threads < 0)) {
+        return -1;
+    } else if (n < 2) {
+        if (n == 1) {
+            SA[0] = 0;
+        }
+        return 0;
+    }
+
+    threads = threads > 0 ? threads : omp_get_max_threads();
+
+    return libsais_main_int(T, SA, n, k, fs, threads);
+}
+
+#endif

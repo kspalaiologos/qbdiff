@@ -22,11 +22,17 @@
 #include "libqbdiff.h"
 
 #include <lzma.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
+
+#if defined(_OPENMP)
+    #include <omp.h>
+#else
+    #warning "OpenMP not available."
+#endif
 
 #include "blake2b.h"
 #include "libqbdiff_private.h"
@@ -38,15 +44,11 @@
 
 // LZMA wrappers with a sane API.
 
-static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int64_t * dest_written) {
+static int compress(const uint8_t * src, size_t src_size, uint8_t ** dest, size_t * dest_written) {
     lzma_options_lzma opt;
-    if(lzma_lzma_preset(&opt, 9 | LZMA_PRESET_EXTREME))
-        return QBERR_LZMAERR;
+    if (lzma_lzma_preset(&opt, 9 | LZMA_PRESET_EXTREME)) return QBERR_LZMAERR;
 
-    lzma_filter filters[] = {
-        { LZMA_FILTER_LZMA2, &opt },
-        { LZMA_VLI_UNKNOWN, NULL }
-    };
+    lzma_filter filters[] = { { LZMA_FILTER_LZMA2, &opt }, { LZMA_VLI_UNKNOWN, NULL } };
 
     // It is generally frowned upon to swear about bad library documentation in comments.
     // Because of this, the comment below is written in German in an attempt to avoid
@@ -54,21 +56,19 @@ static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int6
 
     // Dieser Hurensohn verlangt, dass die Variable, die nur geschrieben und nicht
     // gelesen werden soll, auf 0 initialisiert wird, sonst gibt er den Fehlercode
-    // 11 ("Programmierungsfehler") zurück. Und das wird in der Dokumentation nicht 
+    // 11 ("Programmierungsfehler") zurück. Und das wird in der Dokumentation nicht
     // erwähnt. Das ist verdammt frustrierend.
     *dest_written = 0;
 
     *dest = malloc(src_size);
-    if(!*dest) {
+    if (!*dest) {
         return QBERR_NOMEM;
     }
 
     lzma_ret ret;
 
-    ret = lzma_stream_buffer_encode(filters, LZMA_CHECK_CRC64, NULL,
-                                    src, src_size, *dest, dest_written, src_size - 1);
+    ret = lzma_stream_buffer_encode(filters, LZMA_CHECK_CRC64, NULL, src, src_size, *dest, dest_written, src_size - 1);
     if (ret != LZMA_OK) {
-        printf("LZMA err: %d, tried to compress %d bytes from buffer %p to %p.\n", ret, src_size, src, *dest);
         free(*dest);
         *dest = NULL;
         return QBERR_LZMAERR;
@@ -79,14 +79,14 @@ static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int6
 
 static int decompress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int64_t dest_size) {
     *dest = malloc(dest_size + 1);
-    if(!*dest)
-        return QBERR_NOMEM;
+    if (!*dest) return QBERR_NOMEM;
 
     size_t mem_limit = UINT64_MAX;
     lzma_ret ret;
-    size_t in_pos, out_pos;
+    size_t in_pos = 0, out_pos = 0;
     ret = lzma_stream_buffer_decode(&mem_limit, 0, NULL, src, &in_pos, src_size, *dest, &out_pos, dest_size);
     if (ret != LZMA_OK || in_pos != src_size || out_pos != dest_size) {
+        printf("LZMA error %d\n", ret);
         free(*dest);
         *dest = NULL;
         return QBERR_LZMAERR;
@@ -597,7 +597,7 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         // Handle the case where the old file is empty.
         if (fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5) return QBERR_IOERR;
         if (fwrite(cksum, 1, 64, diff_file) != 64) return QBERR_IOERR;
-        
+
         uint8_t * compressed;
         size_t compressed_len;
         int result = compress(new, new_size, &compressed, &compressed_len);
@@ -630,6 +630,26 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
     orig_db_len = ml.dblen;
     orig_eb_len = ml.eblen;
 
+#if defined(_OPENMP)
+    {
+        uint8_t * b[3] = { ml.cb, ml.db, ml.eb };
+        size_t l[3] = { ml.cblen, ml.dblen, ml.eblen };
+        uint8_t * n[3] = { NULL, NULL, NULL };
+        size_t nl[3] = { 0, 0, 0 };
+
+    #pragma omp parallel for
+        for (int i = 0; i < 3; i++) {
+            compress(b[i], l[i], &n[i], &nl[i]);
+        }
+
+        newcb = n[0];
+        newdb = n[1];
+        neweb = n[2];
+        ml.cblen = nl[0];
+        ml.dblen = nl[1];
+        ml.eblen = nl[2];
+    }
+#else
     err_code = compress(ml.cb, ml.cblen, &newcb, &ml.cblen);
     if (err_code != QBERR_OK) goto err;
 
@@ -638,16 +658,20 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
 
     err_code = compress(ml.eb, ml.eblen, &neweb, &ml.eblen);
     if (err_code != QBERR_OK) goto err;
+#endif
 
-#define sfwrite(ptr, size, nmemb, stream) \
-    if (fwrite(ptr, size, nmemb, stream) != nmemb) { err_code = QBERR_IOERR; goto err; }
+#define sfwrite(ptr, size, nmemb, stream)            \
+    if (fwrite(ptr, size, nmemb, stream) != nmemb) { \
+        err_code = QBERR_IOERR;                      \
+        goto err;                                    \
+    }
 
     // TODO: Account for compression.
-    if (ml.cblen + ml.dblen + ml.eblen > 2 * new_size) {
+    if (ml.cblen + ml.dblen + ml.eblen > 0.9 * new_size) {
         err_code = QBERR_IOERR;
         if (fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5) goto err;
         if (fwrite(cksum, 1, 64, diff_file) != 64) goto err;
-        
+
         uint8_t * compressed;
         size_t compressed_len;
         err_code = compress(new, new_size, &compressed, &compressed_len);
@@ -679,9 +703,9 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         sfwrite(buf, 1, 8, diff_file);
         wi64(orig_eb_len, buf);
         sfwrite(buf, 1, 8, diff_file);
-        sfwrite(ml.cb, 1, ml.cblen, diff_file);
-        sfwrite(ml.db, 1, ml.dblen, diff_file);
-        sfwrite(ml.eb, 1, ml.eblen, diff_file);
+        sfwrite(newcb, 1, ml.cblen, diff_file);
+        sfwrite(newdb, 1, ml.dblen, diff_file);
+        sfwrite(neweb, 1, ml.eblen, diff_file);
     }
 
     free(newcb);
@@ -714,7 +738,7 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         int64_t uncompressed_size = ri64(patch + 69);
         uint8_t * uncompressed;
         int result = decompress(patch + 77, patch_len - 77, &uncompressed, uncompressed_size);
-        if(result != QBERR_OK) return result;
+        if (result != QBERR_OK) return result;
         if (fwrite(uncompressed, 1, uncompressed_size, new_file) != uncompressed_size) {
             free(uncompressed);
             return QBERR_IOERR;
@@ -722,19 +746,19 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         free(uncompressed);
         return QBERR_OK;
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
-        if (patch_len < 45) return QBERR_TRUNCPATCH;
+        if (patch_len < 133) return QBERR_TRUNCPATCH;
         int64_t cblen, dblen, eblen, orig_cblen, orig_dblen, orig_eblen, new_size, old_size, i, ctrl[3],
             errn = QBERR_OK;
         old_size = ri64(patch + 69);
-        new_size = ri64(patch + 77);
-        cblen = ri64(patch + 85);
-        dblen = ri64(patch + 93);
-        eblen = ri64(patch + 101);
-        orig_cblen = ri64(patch + 109);
-        orig_dblen = ri64(patch + 117);
-        orig_eblen = ri64(patch + 125);
+        new_size = ri64(patch + 69 + 8 * 1);
+        cblen = ri64(patch + 69 + 8 * 2);
+        dblen = ri64(patch + 69 + 8 * 3);
+        eblen = ri64(patch + 69 + 8 * 4);
+        orig_cblen = ri64(patch + 69 + 8 * 5);
+        orig_dblen = ri64(patch + 69 + 8 * 6);
+        orig_eblen = ri64(patch + 69 + 8 * 7);
         if (old_size != old_len) return QBERR_BADPATCH;
-        int64_t cb_off = 133;
+        int64_t cb_off = 69 + 8 * 8;
         int64_t db_off = cb_off + cblen;
         int64_t eb_off = db_off + dblen;
         if (new_size < 0 || old_size < 0 || cblen < 0 || dblen < 0 || eblen < 0 || orig_cblen < 0 || orig_dblen < 0 ||
@@ -748,11 +772,11 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         uint8_t *cb = NULL, *db = NULL, *eb = NULL;
 
         errn = decompress(patch + cb_off, cblen, &cb, orig_cblen);
-        if(errn != QBERR_OK) goto err;
+        if (errn != QBERR_OK) goto err;
         errn = decompress(patch + db_off, dblen, &db, orig_dblen);
-        if(errn != QBERR_OK) goto err;
+        if (errn != QBERR_OK) goto err;
         errn = decompress(patch + eb_off, eblen, &eb, orig_eblen);
-        if(errn != QBERR_OK) goto err;
+        if (errn != QBERR_OK) goto err;
 
         memset(new_data, 0, new_size);
         cb_off = 0;
