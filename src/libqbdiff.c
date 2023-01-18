@@ -48,9 +48,18 @@ static int compress(const uint8_t * src, int64_t src_size, uint8_t ** dest, int6
         { LZMA_VLI_UNKNOWN, NULL }
     };
 
+    // It is generally frowned upon to swear about bad library documentation in comments.
+    // Because of this, the comment below is written in German in an attempt to avoid
+    // catching the attention of English monolinguals.
+
+    // Dieser Hurensohn verlangt, dass die Variable, die nur geschrieben und nicht
+    // gelesen werden soll, auf 0 initialisiert wird, sonst gibt er den Fehlercode
+    // 11 ("Programmierungsfehler") zurück. Und das wird in der Dokumentation nicht 
+    // erwähnt. Das ist verdammt frustrierend.
+    *dest_written = 0;
+
     *dest = malloc(src_size);
     if(!*dest) {
-        *dest_written = 0;
         return QBERR_NOMEM;
     }
 
