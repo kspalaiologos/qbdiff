@@ -1,3 +1,5 @@
 
 - Provide a possibility for static linking.
-- Add compression (WIP).
+- Benchmark against bsdiff.
+- Rewrite to C++? A lot of the code would benefit from generics and RAII.
+- Automated testing.
