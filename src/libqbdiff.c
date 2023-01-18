@@ -565,33 +565,20 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
 
     if(ml.error != QBERR_OK)
         return ml.error;
+    
+    char * newcb = NULL, * newdb = NULL, * neweb = NULL;
 
-    char * newcb = malloc(lzma_stream_buffer_bound(ml.cblen));
-    if(newcb == NULL) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        return QBERR_NOMEM;
-    }
+    newcb = malloc(lzma_stream_buffer_bound(ml.cblen));
+    if(newcb == NULL)
+        goto oom_err;
 
-    char * newdb = malloc(lzma_stream_buffer_bound(ml.dblen));
-    if(newdb == NULL) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        free(newcb);
-        return QBERR_NOMEM;
-    }
+    newdb = malloc(lzma_stream_buffer_bound(ml.dblen));
+    if(newdb == NULL)
+        goto oom_err;
 
-    char * neweb = malloc(lzma_stream_buffer_bound(ml.eblen));
-    if(neweb == NULL) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        free(newcb);
-        free(newdb);
-        return QBERR_NOMEM;
-    }
+    neweb = malloc(lzma_stream_buffer_bound(ml.eblen));
+    if(neweb == NULL)
+        goto oom_err;
 
     size_t orig_cb_len, orig_db_len, orig_eb_len;
     orig_cb_len = ml.cblen;
@@ -599,37 +586,16 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
     orig_eb_len = ml.eblen;
 
     lzma_ret result = lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, ml.cb, ml.cblen, newcb, &ml.cblen, lzma_stream_buffer_bound(ml.cblen));
-    if(result != LZMA_OK) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        free(newcb);
-        free(newdb);
-        free(neweb);
-        return QBERR_LZMAERR;
-    }
+    if(result != LZMA_OK)
+        goto lzma_err;
 
     result = lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, ml.db, ml.dblen, newdb, &ml.dblen, lzma_stream_buffer_bound(ml.dblen));
-    if(result != LZMA_OK) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        free(newcb);
-        free(newdb);
-        free(neweb);
-        return QBERR_LZMAERR;
-    }
+    if(result != LZMA_OK)
+        goto lzma_err;
 
     result = lzma_easy_buffer_encode(9 | LZMA_PRESET_EXTREME, LZMA_CHECK_CRC64, NULL, ml.eb, ml.eblen, neweb, &ml.eblen, lzma_stream_buffer_bound(ml.eblen));
-    if(result != LZMA_OK) {
-        free(ml.cb);
-        free(ml.db);
-        free(ml.eb);
-        free(newcb);
-        free(newdb);
-        free(neweb);
-        return QBERR_LZMAERR;
-    }
+    if(result != LZMA_OK)
+        goto lzma_err;
 
     #define sfwrite(ptr, size, nmemb, stream) \
         if(fwrite(ptr, size, nmemb, stream) != nmemb) \
@@ -711,6 +677,15 @@ int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, s
         free(ml.db);
         free(ml.eb);
         return QBERR_NOMEM;
+    
+    lzma_err:
+        free(newcb);
+        free(newdb);
+        free(neweb);
+        free(ml.cb);
+        free(ml.db);
+        free(ml.eb);
+        return QBERR_LZMAERR;
 }
 
 int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
@@ -744,7 +719,7 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
     } else if (!memcmp(patch, QBDIFF_MAGIC_BIG, 5)) {
         if(patch_len < 45)
             return QBERR_TRUNCPATCH;
-        int64_t cblen, dblen, eblen, orig_cblen, orig_dblen, orig_eblen, new_size, old_size, i, ctrl[3];
+        int64_t cblen, dblen, eblen, orig_cblen, orig_dblen, orig_eblen, new_size, old_size, i, ctrl[3], errn = QBERR_OK;
         old_size = ri64(patch + 69);
         new_size = ri64(patch + 77);
         cblen = ri64(patch + 85);
@@ -771,58 +746,33 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         db = malloc(orig_dblen);
         eb = malloc(orig_eblen);
         if(cb == NULL || db == NULL || eb == NULL) {
-            free(new_data);
-            // free(NULL) is a no-op.
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_NOMEM;
+            errn = QBERR_NOMEM; goto err;
         }
         uint64_t memlimit = UINT64_MAX;
         size_t in_pos = 0, out_pos = 0;
         lzma_ret result = lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + cb_off, &in_pos, cblen, cb, &out_pos, orig_cblen);
         if(result != LZMA_OK) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_LZMAERR;
+            errn = QBERR_LZMAERR; goto err;
         }
         if(out_pos != orig_cblen) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_BADPATCH;
+            errn = QBERR_BADPATCH; goto err;
         }
         in_pos = 0;
         out_pos = 0;
         memlimit = UINT64_MAX;
         result = lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + db_off, &in_pos, dblen, db, &out_pos, orig_dblen);
         if(result != LZMA_OK) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_LZMAERR;
+            errn = QBERR_LZMAERR; goto err;
         }
         if(out_pos != orig_dblen) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_BADPATCH;
+            errn = QBERR_BADPATCH; goto err;
         }
         in_pos = 0;
         out_pos = 0;
         memlimit = UINT64_MAX;
         result = lzma_stream_buffer_decode(&memlimit, 0, NULL, patch + eb_off, &in_pos, eblen, eb, &out_pos, orig_eblen);
         if(result != LZMA_OK) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_LZMAERR;
+            errn = QBERR_LZMAERR; goto err;
         }
         memset(new_data, 0, new_size);
         cb_off = 0; db_off = 0; eb_off = 0;
@@ -833,20 +783,12 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
             }
 
             if (ctrl[0] < 0 || ctrl[1] < 0) {
-                free(new_data);
-                free(cb);
-                free(db);
-                free(eb);
-                return QBERR_BADPATCH;
+                errn = QBERR_BADPATCH; goto err;
             }
 
             /* Sanity-check */
             if (new_pos + ctrl[0] > new_size || ctrl[0] < 0 || new_pos + ctrl[0] < 0) {
-                free(new_data);
-                free(cb);
-                free(db);
-                free(eb);
-                return QBERR_BADPATCH;
+                errn = QBERR_BADPATCH; goto err;
             }
 
             memcpy(new_data + new_pos, db + db_off, ctrl[0]);
@@ -865,18 +807,10 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
 
             /* Sanity-check */
             if (new_pos + ctrl[1] > new_size || ctrl[1] < 0 || new_pos + ctrl[1] < 0) {
-                free(new_data);
-                free(cb);
-                free(db);
-                free(eb);
-                return QBERR_BADPATCH;
+                errn = QBERR_BADPATCH; goto err;
             }
             if (old_pos + ctrl[2] > old_size || old_pos + ctrl[2] < 0) {
-                free(new_data);
-                free(cb);
-                free(db);
-                free(eb);
-                return QBERR_BADPATCH;
+                errn = QBERR_BADPATCH; goto err;
             }
 
             /* Read extra string */
@@ -891,30 +825,28 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
         uint8_t new_cksum[64];
         blake2b_cksum(new_data, new_size, new_cksum);
         if(memcmp(patch + 5, new_cksum, 64)) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_BADCKSUM;
+            errn = QBERR_BADCKSUM; goto err;
         }
 
         if(fwrite(new_data, 1, new_size, new_file) != new_size) {
-            free(new_data);
-            free(cb);
-            free(db);
-            free(eb);
-            return QBERR_IOERR;
+            errn = QBERR_IOERR; goto err;
         }
 
         free(cb);
         free(db);
         free(eb);
         free(new_data);
+        return QBERR_OK;
+
+        err:
+            free(cb);
+            free(db);
+            free(eb);
+            free(new_data);
+            return errn;
     } else {
         return QBERR_BADPATCH;
     }
-
-    return QBERR_OK;
 }
 
 const char * qbdiff_version(void) { return VERSION; }
