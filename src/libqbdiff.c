@@ -60,14 +60,14 @@ static int compress(const uint8_t * src, size_t src_size, uint8_t ** dest, size_
     // erwähnt. Das ist verdammt frustrierend.
     *dest_written = 0;
 
-    *dest = malloc(src_size);
+    *dest = malloc(src_size + 64);
     if (!*dest) {
         return QBERR_NOMEM;
     }
 
     lzma_ret ret;
 
-    ret = lzma_stream_buffer_encode(filters, LZMA_CHECK_CRC64, NULL, src, src_size, *dest, dest_written, src_size - 1);
+    ret = lzma_stream_buffer_encode(filters, LZMA_CHECK_CRC64, NULL, src, src_size, *dest, dest_written, src_size + 64);
     if (ret != LZMA_OK) {
         free(*dest);
         *dest = NULL;
