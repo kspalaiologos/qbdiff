@@ -554,7 +554,12 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
         }
 
 #if defined(_OPENMP)
-        libsais_omp(old, I, old_size, 1, NULL, 0);
+        // Paralellization threshold.
+        if(old_size > 32000000) {
+            libsais_omp(old, I, old_size, 1, NULL, 0);
+        } else {
+            libsais(old, I, old_size, 1, NULL);
+        }
 #else
         libsais(old, I, old_size, 1, NULL);
 #endif
