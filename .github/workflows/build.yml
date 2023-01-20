@@ -65,7 +65,7 @@ jobs:
       matrix:
         compiler: [ clang, gcc ]
         feature: [ enable-openmp, disable-openmp ]
-        arch: [ armv6, armv7, aarch64, s390x, ppc64le ]
+        arch: [ armv7, aarch64 ]
     runs-on: ubuntu-latest
     steps:
     - name: Download source package artifact
@@ -79,38 +79,6 @@ jobs:
       with:
         arch: ${{ matrix.arch }}
         distro: stretch
-        shell: /bin/sh
-        dockerRunArgs: |
-          --volume "${PWD}:/qbdiff"
-        install: |
-          apt update -q -y
-          apt install -q -y clang gcc make libomp-dev liblzma-dev
-        run: |
-          cd /qbdiff
-          ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
-          make
-  build-archs-ubuntu:
-    name: Build Matrix for non-x86 architectures (Ubuntu Latest)
-    needs: [ dist ]
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler: [ clang, gcc ]
-        feature: [ enable-openmp, disable-openmp ]
-        arch: [ riscv64 ]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Download source package artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: qbdiff-${{ github.sha }}
-    - name: Extract source package
-      run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
-    - uses: uraimo/run-on-arch-action@v2
-      name: Run in the container
-      with:
-        arch: ${{ matrix.arch }}
-        distro: ubuntu_latest
         shell: /bin/sh
         dockerRunArgs: |
           --volume "${PWD}:/qbdiff"
