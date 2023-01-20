@@ -25,6 +25,10 @@ $ make
 $ sudo make install
 ```
 
+## Use cases
+
+I initially created qbdiff to enable certain kinds of applications (e.g. games) to allow easy automatic updates. I've also thought about the idea of binary diffing in the context of binary linux distributions, which ship patches to software in this (rather succinct) format.
+
 ## Benchmarks against bsdiff 4.3
 
 ```
