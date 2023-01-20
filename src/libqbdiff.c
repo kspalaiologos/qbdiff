@@ -31,7 +31,7 @@
 #if defined(_OPENMP)
     #include <omp.h>
 #else
-    #warning "OpenMP not available."
+    #error "OpenMP not available."
 #endif
 
 #include "blake2b.h"
@@ -86,7 +86,6 @@ static int decompress(const uint8_t * src, int64_t src_size, uint8_t ** dest, in
     size_t in_pos = 0, out_pos = 0;
     ret = lzma_stream_buffer_decode(&mem_limit, 0, NULL, src, &in_pos, src_size, *dest, &out_pos, dest_size);
     if (ret != LZMA_OK || in_pos != src_size || out_pos != dest_size) {
-        printf("LZMA error %d\n", ret);
         free(*dest);
         *dest = NULL;
         return QBERR_LZMAERR;

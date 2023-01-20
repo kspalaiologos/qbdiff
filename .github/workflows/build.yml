@@ -41,7 +41,6 @@ jobs:
       fail-fast: false
       matrix:
         compiler: [ clang, gcc ]
-        feature: [ enable-openmp, disable-openmp ]
     runs-on: ubuntu-latest
     steps:
     - name: Download source package artifact
@@ -53,7 +52,7 @@ jobs:
     - name: Install liblzma and OpenMP
       run: sudo apt update && sudo apt install -y libomp-dev liblzma-dev
     - name: Configure
-      run: ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
+      run: ./configure CC=${{ matrix.compiler }}
     - name: Make
       run: make
 
@@ -64,7 +63,6 @@ jobs:
       fail-fast: false
       matrix:
         compiler: [ clang, gcc ]
-        feature: [ enable-openmp, disable-openmp ]
         arch: [ armv7, aarch64 ]
     runs-on: ubuntu-latest
     steps:
@@ -87,5 +85,5 @@ jobs:
           apt install -q -y clang gcc make libomp-dev liblzma-dev
         run: |
           cd /qbdiff
-          ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
+          ./configure CC=${{ matrix.compiler }}
           make
