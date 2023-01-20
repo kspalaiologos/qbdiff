@@ -543,6 +543,7 @@ static struct match_result match64(const int64_t * RESTRICT I, const uint8_t * R
 
 static struct match_result diff(const uint8_t * old, const uint8_t * new, const size_t old_size,
                                 const size_t new_size) {
+    int32_t sais_ret = 0;
     if (old_size < INT32_MAX - 8) {
         int32_t * I = malloc((old_size + 1) * sizeof(int32_t));
 
@@ -555,13 +556,19 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
 #if defined(_OPENMP)
         // Paralellization threshold.
         if(old_size > 32000000) {
-            libsais_omp(old, I, old_size, 1, NULL, 0);
+            sais_ret = libsais_omp(old, I, old_size, 1, NULL, 0);
         } else {
-            libsais(old, I, old_size, 1, NULL);
+            sais_ret = libsais(old, I, old_size, 1, NULL);
         }
 #else
-        libsais(old, I, old_size, 1, NULL);
+        sais_ret = libsais(old, I, old_size, 1, NULL);
 #endif
+
+        if(sais_ret < 0) {
+            struct match_result ml = { 0 };
+            ml.error = QBERR_SAIS;
+            return ml;
+        }
 
         struct match_result ml = match32(I, old, new, new_size, old_size);
 
@@ -578,10 +585,16 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
         }
 
 #if defined(_OPENMP)
-        libsais64_omp(old, I, old_size, 1, NULL, 0);
+        sais_ret = libsais64_omp(old, I, old_size, 1, NULL, 0);
 #else
-        libsais64(old, I, old_size, 1, NULL);
+        sais_ret = libsais64(old, I, old_size, 1, NULL);
 #endif
+
+        if(sais_ret < 0) {
+            struct match_result ml = { 0 };
+            ml.error = QBERR_SAIS;
+            return ml;
+        }
 
         struct match_result ml = match64(I, old, new, new_size, old_size);
 
@@ -874,6 +887,8 @@ const char * qbdiff_error(int code) {
             return "Bad checksum";
         case QBERR_LZMAERR:
             return "LZMA error";
+        case QBERR_SAIS:
+            return "SAIS error";
         default:
             return "Unknown error";
     }

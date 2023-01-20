@@ -33,6 +33,7 @@
 #define QBERR_BADPATCH 4
 #define QBERR_BADCKSUM 5
 #define QBERR_LZMAERR 6
+#define QBERR_SAIS 7
 
 int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_len, size_t new_len, FILE * diff_file);
 int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len, FILE * new_file);
