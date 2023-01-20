@@ -19,8 +19,7 @@ jobs:
         sudo make install
     - name: Install OpenMP and LZMA
       run: |
-        sudo apt update
-        sudo apt install -y libomp-dev liblzma-dev
+        sudo apt update && sudo apt install -y libomp-dev liblzma-dev
     - name: Configure
       run: |
         ./bootstrap.sh
@@ -51,6 +50,8 @@ jobs:
         name: qbdiff-${{ github.sha }}
     - name: Extract source package
       run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
+    - name: Install liblzma and OpenMP
+      run: sudo apt update && sudo apt install -y libomp-dev liblzma-dev
     - name: Configure
       run: ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
     - name: Make
