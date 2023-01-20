@@ -57,21 +57,22 @@ static inline int64_t ri64(const uint8_t * buf) {
 }
 
 // Open the binary output file.
-#ifdef __linux__
-    #include <sys/stat.h>
-
-static int is_dir(const char * path) {
-    struct stat sb;
-    if (stat(path, &sb) == 0 && S_ISDIR(sb.st_mode)) return 1;
-    return 0;
-}
-#else
+#ifdef _WIN32
     #include <windows.h>
 
 static int is_dir(const char * path) {
     DWORD attr = GetFileAttributes(path);
     if (attr == INVALID_FILE_ATTRIBUTES) return 0;
     return (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+#else
+    #include <sys/stat.h>
+    #include <unistd.h>
+
+static int is_dir(const char * path) {
+    struct stat sb;
+    if (stat(path, &sb) == 0 && S_ISDIR(sb.st_mode)) return 1;
+    return 0;
 }
 #endif
 
@@ -91,11 +92,6 @@ static FILE * open_output(char * output) {
 
     return output_des;
 }
-
-#ifdef __linux__
-    // Needed for fsync.
-    #include <unistd.h>
-#endif
 
 // Sync the data to disk using fsync.
 static void close_out_file(FILE * des) {
@@ -137,7 +133,6 @@ struct file_mapping {
 };
 
 #ifdef _WIN32
-
     #include <windows.h>
 
 static struct file_mapping map_file(char * path) {
@@ -208,7 +203,6 @@ static void unmap_file(struct file_mapping mapping) {
     munmap(mapping.data, mapping.length);
     close((int)(intptr_t)mapping.h1);
 }
-
 #endif
 
 #endif
