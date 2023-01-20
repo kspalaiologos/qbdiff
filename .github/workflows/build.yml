@@ -73,7 +73,7 @@ jobs:
       with:
         name: qbdiff-${{ github.sha }}
     - name: Extract source package
-      run: tar --strip-components=1 -xf bzip3-${{ github.sha }}.tar.gz
+      run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
     - uses: uraimo/run-on-arch-action@v2
       name: Run in the container
       with:
