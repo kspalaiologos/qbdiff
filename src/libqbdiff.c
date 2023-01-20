@@ -31,7 +31,7 @@
 #if defined(_OPENMP)
     #include <omp.h>
 #else
-    #warning "OpenMP not available."
+    #error "OpenMP not available."
 #endif
 
 #include "blake2b.h"
