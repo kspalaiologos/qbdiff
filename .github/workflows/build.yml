@@ -56,29 +56,6 @@ jobs:
     - name: Make
       run: make
 
-  buildmacos:
-    name: Build Matrix - MacOS
-    needs: [ dist ]
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler: [ clang, gcc ]
-    runs-on: macos-latest
-    steps:
-    - name: Download source package artifact
-      uses: actions/download-artifact@v3
-      with:
-        name: qbdiff-${{ github.sha }}
-    - name: Extract source package
-      run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
-    - name: Install OpenMP
-      run: |
-        brew install libomp
-    - name: Configure
-      run: ./configure CC=${{ matrix.compiler }}
-    - name: Make
-      run: make
-
   build-archs:
     name: Build Matrix for non-x86 architectures (Debian Stretch)
     needs: [ dist ]
