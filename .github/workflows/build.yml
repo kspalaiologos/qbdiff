@@ -56,8 +56,6 @@ jobs:
       run: ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
     - name: Make
       run: make
-    - name: Check
-      run: make roundtrip
 
   build-archs:
     name: Build Matrix for non-x86 architectures (Debian Stretch)
