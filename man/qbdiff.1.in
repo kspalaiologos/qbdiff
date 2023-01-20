@@ -1,21 +1,21 @@
-.TH @TRANSFORMED_PACKAGE_NAME@ 1 "@MAN_DATE@" "version v@VERSION@"
+.TH qbdiff 1 "@MAN_DATE@" "version v@VERSION@"
 .
 .SH NAME
-@TRANSFORMED_PACKAGE_NAME@ \- quick binary diff
+qbdiff \- quick binary diff
 
 .SH SYNOPSIS
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 .RB [ " old_file new_file diff_file " ]
 .
 .SH DESCRIPTION
 Computes the difference between two binary files and writes it to a binary
 file suitable for use with
 .B qbpatch.
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 is an improved and modernised version of
 .B bsdiff
 by Colin Percival.
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 is generally faster and can take advantage of multiple CPU cores.
 
 The command-line invocation is deliberately the same as of
@@ -23,7 +23,7 @@ The command-line invocation is deliberately the same as of
 .PP
 
 .SH PATCH COMPRESSION
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 uses the
 .B lzma
 compression algorithm to compress the patch file.
@@ -41,12 +41,12 @@ is highly assymmetric, it's also two to six times faster in decompression
 The
 .B bsdiff
 memory usage is max(17*n,9*n+m)+O(1), while
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 memory usage is usually bounded by O(5*n+m)+O(1) in most use cases - the
 improvement is clear and almost twofold-threefold.
 
 .SH INTEGRITY CHECKING
-.B @TRANSFORMED_PACKAGE_NAME@
+.B qbdiff
 will compute the BLAKE2b checksum of
 .B new_file
 and embed it into the patch file. The checksum is verified when

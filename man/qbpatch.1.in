@@ -1,0 +1,45 @@
+.TH patch 1 "@MAN_DATE@" "version v@VERSION@"
+.
+.SH NAME
+qbpatch \- quick binary diff
+
+.SH SYNOPSIS
+.B qbpatch
+.RB [ " old_file new_file diff_file " ]
+.
+.SH DESCRIPTION
+Applies the previously computed difference
+.B diff_file
+to
+.B old_file
+to create
+.B new_file
+.PP
+
+.B qbdiff
+(and by extension
+.B qbpatch
+) is an improved and modernised version of
+.B bsdiff
+by Colin Percival.
+
+The command-line invocation is deliberately the same as of
+.B bspatch
+.PP
+
+.SH INTEGRITY CHECKING
+The integrity of the newly created file is checked by
+.B qbpatch
+using the BLAKE2b checksum embedded in the patch file. If the checksum
+does not match, an error is reported.
+
+.SH AUTHOR
+Kamila Szewczyk, kspalaiologos@gmail.com.
+
+https://github.com/kspalaiologos/qbdiff
+
+Thanks to: Ilya Grebnov, Benjamin Strachan, Colin Percival, Igor Pavlov,
+Lasse Collin
+
+.SH "SEE ALSO"
+\fBbsdiff(1)\fR, \fBbspatch(1)\fR, \fBqbdiff(1)\fR
