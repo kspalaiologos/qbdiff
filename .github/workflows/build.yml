@@ -1,0 +1,125 @@
+name: Build
+
+on: [ push, pull_request ]
+
+jobs:
+
+  dist:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install libtool v2.4.7
+      run: |
+        wget -q https://ftpmirror.gnu.org/libtool/libtool-2.4.7.tar.gz
+        tar xvfz libtool-2.4.7.tar.gz
+        cd libtool-2.4.7
+        ./configure
+        make
+        sudo make install
+    - name: Install OpenMP and LZMA
+      run: |
+        sudo apt update
+        sudo apt install -y libomp-dev liblzma-dev
+    - name: Configure
+      run: |
+        ./bootstrap.sh
+        ./configure
+    - name: Make source package
+      run: make VERSION=${{ github.sha }} dist
+    - name: Upload source package artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: qbdiff-${{ github.sha }}
+        path: qbdiff-${{ github.sha }}.tar.gz
+    - name: Run distcheck
+      run: make distcheck
+
+  build:
+    name: Build Matrix
+    needs: [ dist ]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ ubuntu-latest, macos-latest ]
+        compiler: [ clang, gcc ]
+        feature: [ enable-openmp, disable-openmp ]
+    runs-on: ${{ matrix.platform }}
+    steps:
+    - name: Download source package artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: qbdiff-${{ github.sha }}
+    - name: Extract source package
+      run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
+    - name: Configure
+      run: ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
+    - name: Make
+      run: make
+    - name: Check
+      run: make roundtrip
+
+  build-archs:
+    name: Build Matrix for non-x86 architectures (Debian Stretch)
+    needs: [ dist ]
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ clang, gcc ]
+        feature: [ enable-openmp, disable-openmp ]
+        arch: [ armv6, armv7, aarch64, s390x, ppc64le ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download source package artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: qbdiff-${{ github.sha }}
+    - name: Extract source package
+      run: tar --strip-components=1 -xf bzip3-${{ github.sha }}.tar.gz
+    - uses: uraimo/run-on-arch-action@v2
+      name: Run in the container
+      with:
+        arch: ${{ matrix.arch }}
+        distro: stretch
+        shell: /bin/sh
+        dockerRunArgs: |
+          --volume "${PWD}:/qbdiff"
+        install: |
+          apt update -q -y
+          apt install -q -y clang gcc make libomp-dev liblzma-dev
+        run: |
+          cd /qbdiff
+          ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
+          make
+  build-archs-ubuntu:
+    name: Build Matrix for non-x86 architectures (Ubuntu Latest)
+    needs: [ dist ]
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [ clang, gcc ]
+        feature: [ enable-openmp, disable-openmp ]
+        arch: [ riscv64 ]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download source package artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: qbdiff-${{ github.sha }}
+    - name: Extract source package
+      run: tar --strip-components=1 -xf qbdiff-${{ github.sha }}.tar.gz
+    - uses: uraimo/run-on-arch-action@v2
+      name: Run in the container
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu_latest
+        shell: /bin/sh
+        dockerRunArgs: |
+          --volume "${PWD}:/qbdiff"
+        install: |
+          apt update -q -y
+          apt install -q -y clang gcc make libomp-dev liblzma-dev
+        run: |
+          cd /qbdiff
+          ./configure CC=${{ matrix.compiler }} --${{ matrix.feature }}
+          make
