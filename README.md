@@ -1,5 +1,7 @@
 # qbdiff
 
+[![Build](https://github.com/kspalaiologos/qbdiff/actions/workflows/build.yml/badge.svg)](https://github.com/kspalaiologos/qbdiff/actions/workflows/build.yml)
+
 Quick Binary Diff. An improved and modernised version of bsdiff. An overview:
 
 - Faster than bsdiff, can take advantage of multiple CPU cores.
