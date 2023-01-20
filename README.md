@@ -9,6 +9,20 @@ Quick Binary Diff. An improved and modernised version of bsdiff. An overview:
 - Integrity checking using BLAKE2b.
 - Can be used as a library.
 
+## Installation
+
+Make sure to obtain `libomp-dev` and `liblzma-dev`. While OpenMP is not necessary, it will decrease the wall clock time taken by the program approximately threefold.
+
+```
+# If using a git clone (not needed for source packages), first...
+$ ./bootstrap.sh
+
+# All...
+$ ./configure
+$ make
+$ sudo make install
+```
+
 ## Benchmarks against bsdiff 4.3
 
 ```
@@ -35,3 +49,9 @@ qbdiff uses LZMA, which has considerably longer compression time which is respon
 
 Furthermore, the [bsdiff memory usage](https://www.daemonology.net/bsdiff/) is `max(17*n,9*n+m)+O(1)`, while qbdiff memory usage is usually bounded by `O(5*n+m)+O(1)` in most use cases - the improvement is clear and almost twofold-threefold.
 
+## Thanks
+
+- Ilya Grebnov for libsais
+- Igor Pavlov & Lasse Collin for liblzma
+- Colin Percival for bsdiff
+- Benjamin Strachan for conducting the performance benchmarks.
