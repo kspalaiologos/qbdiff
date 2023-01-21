@@ -22,6 +22,10 @@
 #ifndef LIBQBDIFF_H
 #define LIBQBDIFF_H
 
+#ifndef LIBQDIFF_PUBLIC_API
+    #define LIBQDIFF_PUBLIC_API __attribute__((visibility("default")))
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -35,9 +39,11 @@
 #define QBERR_LZMAERR 6
 #define QBERR_SAIS 7
 
-int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_len, size_t new_len, FILE * diff_file);
-int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len, FILE * new_file);
-const char * qbdiff_version(void);
-const char * qbdiff_error(int code);
+LIBQDIFF_PUBLIC_API int qbdiff_compute(const uint8_t * old, const uint8_t * new, size_t old_len, size_t new_len,
+                                       FILE * diff_file);
+LIBQDIFF_PUBLIC_API int qbdiff_patch(const uint8_t * old, const uint8_t * patch, size_t old_len, size_t patch_len,
+                                     FILE * new_file);
+LIBQDIFF_PUBLIC_API const char * qbdiff_version(void);
+LIBQDIFF_PUBLIC_API const char * qbdiff_error(int code);
 
 #endif

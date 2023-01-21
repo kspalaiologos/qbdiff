@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I build-aux
 
-AM_CFLAGS = -I$(top_srcdir)/include $(OPENMP_CFLAGS)
+AM_CFLAGS = -I$(top_srcdir)/include $(OPENMP_CFLAGS) -fvisibility=hidden
 
 EXTRA_DIST = LICENSE 3rdparty/libsais-LICENSE README.md build-aux/git-version-gen
 

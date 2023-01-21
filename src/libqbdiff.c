@@ -555,7 +555,7 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
 
 #if defined(_OPENMP)
         // Paralellization threshold.
-        if(old_size > 32000000) {
+        if (old_size > 32000000) {
             sais_ret = libsais_omp(old, I, old_size, 1, NULL, 0);
         } else {
             sais_ret = libsais(old, I, old_size, 1, NULL);
@@ -564,7 +564,7 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
         sais_ret = libsais(old, I, old_size, 1, NULL);
 #endif
 
-        if(sais_ret < 0) {
+        if (sais_ret < 0) {
             struct match_result ml = { 0 };
             ml.error = QBERR_SAIS;
             return ml;
@@ -590,7 +590,7 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
         sais_ret = libsais64(old, I, old_size, 1, NULL);
 #endif
 
-        if(sais_ret < 0) {
+        if (sais_ret < 0) {
             struct match_result ml = { 0 };
             ml.error = QBERR_SAIS;
             return ml;
@@ -604,8 +604,8 @@ static struct match_result diff(const uint8_t * old, const uint8_t * new, const 
     }
 }
 
-int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size, size_t new_size,
-                   FILE * diff_file) {
+LIBQDIFF_PUBLIC_API int qbdiff_compute(const uint8_t * RESTRICT old, const uint8_t * RESTRICT new, size_t old_size,
+                                       size_t new_size, FILE * diff_file) {
     int err_code = 0;
     uint8_t cksum[64];
     blake2b_cksum(new, new_size, cksum);
@@ -743,8 +743,8 @@ err:
     return err_code;
 }
 
-int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len, size_t patch_len,
-                 FILE * new_file) {
+LIBQDIFF_PUBLIC_API int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, size_t old_len,
+                                     size_t patch_len, FILE * new_file) {
     // Check magic
     if (patch_len < 70) return QBERR_TRUNCPATCH;
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
@@ -869,9 +869,9 @@ int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t * RESTRICT patch, s
     }
 }
 
-const char * qbdiff_version(void) { return VERSION; }
+LIBQDIFF_PUBLIC_API const char * qbdiff_version(void) { return VERSION; }
 
-const char * qbdiff_error(int code) {
+LIBQDIFF_PUBLIC_API const char * qbdiff_error(int code) {
     switch (code) {
         case QBERR_OK:
             return "No error";
