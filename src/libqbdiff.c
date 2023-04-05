@@ -178,6 +178,8 @@ static void search64(const int64_t * RESTRICT I, const uint8_t * RESTRICT old, i
             *max_len = x;
             *old_pos = I[st];
         }
+        if(en == old_size)
+            printf("%ld\n", I[en]);
         y = matchlen(old + I[en], old_size - I[en], new, new_size);
         if (y > *max_len) {
             *max_len = y;
@@ -610,8 +612,9 @@ LIBQDIFF_PUBLIC_API int qbdiff_compute(const uint8_t * RESTRICT old, const uint8
     uint8_t cksum[64];
     blake2b_cksum(new, new_size, cksum);
 
-    if (old_size == 0) {
-        // Handle the case where the old file is empty.
+    if (old_size < 256 || new_size < 256) {
+        // Handle the case where the old file is empty,
+        // or both files are very small.
         if (fwrite(QBDIFF_MAGIC_FULL, 1, 5, diff_file) != 5) return QBERR_IOERR;
         if (fwrite(cksum, 1, 64, diff_file) != 64) return QBERR_IOERR;
 
@@ -750,12 +753,12 @@ LIBQDIFF_PUBLIC_API int qbdiff_patch(const uint8_t * RESTRICT old, const uint8_t
     if (!memcmp(patch, QBDIFF_MAGIC_FULL, 5)) {
         // We can essentially relay diff_file to new_file.
         uint8_t new_cksum[64];
-        blake2b_cksum(patch + 77, patch_len - 77, new_cksum);
-        if (memcmp(patch + 5, new_cksum, 64)) return QBERR_BADCKSUM;
         int64_t uncompressed_size = ri64(patch + 69);
         uint8_t * uncompressed;
         int result = decompress(patch + 77, patch_len - 77, &uncompressed, uncompressed_size);
         if (result != QBERR_OK) return result;
+        blake2b_cksum(uncompressed, uncompressed_size, new_cksum);
+        if (memcmp(patch + 5, new_cksum, 64)) return QBERR_BADCKSUM;
         if (fwrite(uncompressed, 1, uncompressed_size, new_file) != uncompressed_size) {
             free(uncompressed);
             return QBERR_IOERR;
