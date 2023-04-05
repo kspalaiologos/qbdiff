@@ -235,7 +235,7 @@ static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * R
     result.eblen = 0;
     result.error = QBERR_OK;
 
-    cb = malloc(new_size + new_size / 50 + 5);
+    cb = malloc(new_size + new_size / 50 + 50);
 
     if (cb == NULL) {
         result.error = QBERR_NOMEM;
@@ -244,7 +244,7 @@ static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * R
         result.cb = cb;
     }
 
-    db = malloc(new_size + new_size / 50 + 5);
+    db = malloc(new_size + new_size / 50 + 50);
 
     if (db == NULL) {
         free(cb);
@@ -254,7 +254,7 @@ static struct match_result match32(const int32_t * RESTRICT I, const uint8_t * R
         result.db = db;
     }
 
-    eb = malloc(new_size + new_size / 50 + 5);
+    eb = malloc(new_size + new_size / 50 + 50);
 
     if (eb == NULL) {
         free(cb);
