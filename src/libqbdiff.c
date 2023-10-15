@@ -657,8 +657,9 @@ LIBQDIFF_PUBLIC_API int qbdiff_compute(const uint8_t * RESTRICT old, const uint8
         uint8_t * n[3] = { NULL, NULL, NULL };
         size_t nl[3] = { 0, 0, 0 };
 
+        int i;
     #pragma omp parallel for
-        for (int i = 0; i < 3; i++) {
+        for (i = 0; i < 3; i++) {
             compress(b[i], l[i], &n[i], &nl[i]);
         }
 
