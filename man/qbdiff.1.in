@@ -54,7 +54,7 @@ and embed it into the patch file. The checksum is verified when
 finishes patching the file.
 
 .SH AUTHOR
-Kamila Szewczyk, kspalaiologos@gmail.com.
+Kamila Szewczyk, k@iczelia.net.
 
 https://github.com/kspalaiologos/qbdiff
 
