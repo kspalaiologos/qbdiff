@@ -34,7 +34,7 @@ using the BLAKE2b checksum embedded in the patch file. If the checksum
 does not match, an error is reported.
 
 .SH AUTHOR
-Kamila Szewczyk, kspalaiologos@gmail.com.
+Kamila Szewczyk, k@iczelia.net.
 
 https://github.com/kspalaiologos/qbdiff
 
