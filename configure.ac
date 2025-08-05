@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([qbdiff], [m4_esyscmd(build-aux/git-version-gen .tarball-version)], [https://github.com/kspalaiologos/qbdiff])
+AC_INIT([qbdiff], [m4_esyscmd(build-aux/git-version-gen .tarball-version)], [https://github.com/iczelia/qbdiff])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign subdir-objects tar-ustar dist-bzip2 dist-xz dist-zip color-tests])
 AM_SILENT_RULES([yes])
