@@ -1,6 +1,6 @@
 # qbdiff
 
-[![Build](https://github.com/kspalaiologos/qbdiff/actions/workflows/build.yml/badge.svg)](https://github.com/kspalaiologos/qbdiff/actions/workflows/build.yml)
+[![Build](https://github.com/iczelia/qbdiff/actions/workflows/build.yml/badge.svg)](https://github.com/iczelia/qbdiff/actions/workflows/build.yml)
 
 Quick Binary Diff. An improved and modernised version of bsdiff. An overview:
 
